@@ -1,0 +1,140 @@
+version: '3.8'
+
+services:
+  # MongoDB - Banco de dados
+  mongodb:
+    image: mongo:7.0
+    container_name: parecer_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: parecer_admin_2024
+      MONGO_INITDB_DATABASE: parecer_db
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - parecer_network
+
+  # MinIO - Armazenamento de arquivos
+  minio:
+    image: minio/minio:latest
+    container_name: parecer_minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_admin_2024
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - parecer_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Mistral OCR API (usando vLLM para servir o modelo)
+  mistral_ocr:
+    image: vllm/vllm-openai:latest
+    container_name: parecer_mistral
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_TOKEN}
+    command: >
+      --model mistralai/Pixtral-12B-2409
+      --dtype auto
+      --max-model-len 16384
+      --gpu-memory-utilization 0.9
+    volumes:
+      - mistral_cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - parecer_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: parecer_backend
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=mongodb://admin:parecer_admin_2024@mongodb:27017/parecer_db?authSource=admin
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minio_admin
+      - MINIO_SECRET_KEY=minio_admin_2024
+      - MINIO_USE_SSL=false
+      - MISTRAL_API_URL=http://mistral_ocr:8000/v1
+      - JWT_SECRET=${JWT_SECRET:-parecer_jwt_secret_change_in_production}
+    depends_on:
+      - mongodb
+      - minio
+      - mistral_ocr
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - parecer_network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: parecer_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - parecer_network
+
+  # Redis para cache e filas
+  redis:
+    image: redis:7-alpine
+    container_name: parecer_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - parecer_network
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  minio_data:
+  mistral_cache:
+  redis_data:
+
+networks:
+  parecer_network:
+    driver: bridge
