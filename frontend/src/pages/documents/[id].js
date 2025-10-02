@@ -69,8 +69,14 @@ export default function DocumentDetails() {
     }
   };
 
-  const handleDownload = () => {
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/documents/${id}/download`, '_blank');
+  const handleDownload = async () => {
+    try {
+      const response = await documents.download(id);
+      window.open(response.data.downloadUrl, '_blank');
+      toast.success('Download iniciado!');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao fazer download');
+    }
   };
 
   const handleUpdateCase = () => {
