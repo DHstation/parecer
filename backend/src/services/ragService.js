@@ -3,10 +3,18 @@ const crypto = require('crypto');
 
 class RAGService {
   constructor() {
-    this.mistralApiUrl = process.env.MISTRAL_API_URL || 'http://mistral_ocr:8000/v1';
+    this.mistralApiKey = process.env.MISTRAL_API_KEY || null;
+    this.mistralApiUrl = this.mistralApiKey
+      ? 'https://api.mistral.ai/v1'
+      : (process.env.MISTRAL_API_URL || 'http://mistral_ocr:8000/v1');
     this.vectorStore = new Map(); // Em produção, usar FAISS ou vector DB
     this.useSimpleEmbeddings = process.env.USE_SIMPLE_EMBEDDINGS !== 'false';
-    console.log('RAG Service initialized (Simple embeddings mode:', this.useSimpleEmbeddings, ')');
+
+    if (this.mistralApiKey) {
+      console.log('RAG Service initialized with Mistral Official API (Simple embeddings mode:', this.useSimpleEmbeddings, ')');
+    } else {
+      console.log('RAG Service initialized with local Mistral (Simple embeddings mode:', this.useSimpleEmbeddings, ')');
+    }
   }
 
   /**
@@ -207,10 +215,20 @@ class RAGService {
         .join('\n\n');
 
       // 3. Gerar resposta usando Mistral
+      const model = this.mistralApiKey ? 'pixtral-12b-2409' : 'mistralai/Pixtral-12B-2409';
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Adicionar Authorization se tiver API key
+      if (this.mistralApiKey) {
+        headers['Authorization'] = `Bearer ${this.mistralApiKey}`;
+      }
+
       const response = await axios.post(
         `${this.mistralApiUrl}/chat/completions`,
         {
-          model: 'mistralai/Pixtral-12B-2409',
+          model: model,
           messages: [
             {
               role: 'system',
@@ -228,6 +246,7 @@ class RAGService {
           temperature: 0.3,
         },
         {
+          headers: headers,
           timeout: 60000,
         }
       );
