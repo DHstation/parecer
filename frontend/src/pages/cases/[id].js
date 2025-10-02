@@ -1,8 +1,8 @@
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { cases, documents } from '../../services/api';
-import { FaArrowLeft, FaEdit, FaTrash, FaFileAlt, FaPlus, FaRobot } from 'react-icons/fa';
-import { useState } from 'react';
+import { FaArrowLeft, FaEdit, FaTrash, FaFileAlt, FaPlus, FaRobot, FaTimes, FaCheckSquare, FaSquare, FaSearch, FaSave } from 'react-icons/fa';
+import { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 
 export default function CaseDetails() {
@@ -11,6 +11,11 @@ export default function CaseDetails() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  const [showSelectModal, setShowSelectModal] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [selectedDocIds, setSelectedDocIds] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [removeSearchTerm, setRemoveSearchTerm] = useState('');
 
   const { data: caseData, isLoading } = useQuery(
     ['case', id],
@@ -22,6 +27,12 @@ export default function CaseDetails() {
     ['case-documents', id],
     () => documents.list({ caseId: id }),
     { enabled: !!id }
+  );
+
+  // Buscar TODOS os documentos do sistema (sem filtro de caso)
+  const { data: allDocumentsData } = useQuery(
+    'all-documents',
+    () => documents.list({ limit: 100 })
   );
 
   const updateMutation = useMutation(
@@ -82,6 +93,141 @@ export default function CaseDetails() {
     if (confirm('Tem certeza que deseja excluir este caso?')) {
       deleteMutation.mutate();
     }
+  };
+
+  // Mutation para vincular documentos ao caso
+  const linkDocumentsMutation = useMutation(
+    async (documentIds) => {
+      // Atualizar cada documento para vincular ao caso
+      await Promise.all(
+        documentIds.map(docId => documents.update(docId, { caseId: id }))
+      );
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['case-documents', id]);
+        queryClient.invalidateQueries(['case', id]);
+        queryClient.invalidateQueries('all-documents');
+        setShowSelectModal(false);
+        setSelectedDocIds([]);
+        setSearchTerm('');
+        toast.success('Documentos vinculados com sucesso!');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Erro ao vincular documentos');
+      }
+    }
+  );
+
+  // Filtrar documentos disponíveis (sem caso ou de outro caso)
+  const allDocs = allDocumentsData?.data?.documents || [];
+  const currentCaseDocIds = caseDocuments?.data?.documents?.map(d => d._id) || [];
+
+  const availableDocuments = useMemo(() => {
+    return allDocs.filter(doc => !currentCaseDocIds.includes(doc._id));
+  }, [allDocs, currentCaseDocIds]);
+
+  // Filtrar por busca
+  const filteredDocuments = useMemo(() => {
+    if (!searchTerm) return availableDocuments;
+
+    const term = searchTerm.toLowerCase();
+    return availableDocuments.filter(doc =>
+      doc.originalName?.toLowerCase().includes(term) ||
+      doc.documentType?.toLowerCase().includes(term)
+    );
+  }, [availableDocuments, searchTerm]);
+
+  const toggleSelectDoc = (docId) => {
+    setSelectedDocIds(prev => {
+      if (prev.includes(docId)) {
+        return prev.filter(id => id !== docId);
+      } else {
+        return [...prev, docId];
+      }
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedDocIds.length === filteredDocuments.length && filteredDocuments.length > 0) {
+      setSelectedDocIds([]);
+    } else {
+      setSelectedDocIds(filteredDocuments.map(doc => doc._id));
+    }
+  };
+
+  const handleLinkDocuments = () => {
+    if (selectedDocIds.length === 0) {
+      toast.error('Selecione pelo menos um documento');
+      return;
+    }
+
+    linkDocumentsMutation.mutate(selectedDocIds);
+  };
+
+  // Mutation para desvincular documentos do caso
+  const unlinkDocumentsMutation = useMutation(
+    async (documentIds) => {
+      // Atualizar cada documento para remover o vínculo (caseId = null)
+      await Promise.all(
+        documentIds.map(docId => documents.update(docId, { caseId: null }))
+      );
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['case-documents', id]);
+        queryClient.invalidateQueries(['case', id]);
+        queryClient.invalidateQueries('all-documents');
+        setShowRemoveModal(false);
+        setSelectedDocIds([]);
+        setRemoveSearchTerm('');
+        toast.success('Documentos desvinculados com sucesso!');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Erro ao desvincular documentos');
+      }
+    }
+  );
+
+  // Documentos vinculados ao caso atual
+  const caseDocsList = caseDocuments?.data?.documents || [];
+
+  // Filtrar documentos do caso por busca (modal de remover)
+  const filteredCaseDocs = useMemo(() => {
+    if (!removeSearchTerm) return caseDocsList;
+
+    const term = removeSearchTerm.toLowerCase();
+    return caseDocsList.filter(doc =>
+      doc.originalName?.toLowerCase().includes(term) ||
+      doc.documentType?.toLowerCase().includes(term)
+    );
+  }, [caseDocsList, removeSearchTerm]);
+
+  const toggleSelectRemoveDoc = (docId) => {
+    setSelectedDocIds(prev => {
+      if (prev.includes(docId)) {
+        return prev.filter(id => id !== docId);
+      } else {
+        return [...prev, docId];
+      }
+    });
+  };
+
+  const toggleSelectAllRemove = () => {
+    if (selectedDocIds.length === filteredCaseDocs.length && filteredCaseDocs.length > 0) {
+      setSelectedDocIds([]);
+    } else {
+      setSelectedDocIds(filteredCaseDocs.map(doc => doc._id));
+    }
+  };
+
+  const handleUnlinkDocuments = () => {
+    if (selectedDocIds.length === 0) {
+      toast.error('Selecione pelo menos um documento');
+      return;
+    }
+
+    unlinkDocumentsMutation.mutate(selectedDocIds);
   };
 
   if (isLoading) {
@@ -289,12 +435,22 @@ export default function CaseDetails() {
                     <h2 className="text-xl font-semibold text-gray-900">
                       Documentos ({caseDocuments?.data?.documents?.length || 0})
                     </h2>
-                    <button
-                      onClick={() => router.push(`/documents?caseId=${id}`)}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                    >
-                      <FaPlus /> Adicionar
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowSelectModal(true)}
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                      >
+                        <FaPlus /> Adicionar
+                      </button>
+                      {caseDocuments?.data?.documents?.length > 0 && (
+                        <button
+                          onClick={() => setShowRemoveModal(true)}
+                          className="px-3 py-1 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                        >
+                          <FaTrash /> Remover
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -394,6 +550,314 @@ export default function CaseDetails() {
           )}
         </div>
       </main>
+
+      {/* Modal de Seleção de Documentos */}
+      {showSelectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Adicionar Documentos ao Caso</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Selecione os documentos que deseja vincular ao caso "{caseItem?.title}"
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowSelectModal(false);
+                  setSelectedDocIds([]);
+                  setSearchTerm('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes className="text-2xl" />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-4">
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome do arquivo ou tipo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Select All Checkbox */}
+            {filteredDocuments.length > 0 && (
+              <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                <label className="flex items-center cursor-pointer">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-blue-600"
+                  >
+                    {selectedDocIds.length === filteredDocuments.length && filteredDocuments.length > 0 ? (
+                      <FaCheckSquare className="text-blue-600 text-lg" />
+                    ) : (
+                      <FaSquare className="text-gray-400 text-lg" />
+                    )}
+                    Selecionar todos ({filteredDocuments.length})
+                  </button>
+                </label>
+                {selectedDocIds.length > 0 && (
+                  <span className="text-sm text-gray-600">
+                    {selectedDocIds.length} selecionado(s)
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Documents List */}
+            <div className="flex-1 overflow-y-auto mb-6">
+              {filteredDocuments.length === 0 ? (
+                <div className="text-center py-12">
+                  <FaFileAlt className="mx-auto text-gray-300 text-5xl mb-4" />
+                  <p className="text-gray-500">
+                    {availableDocuments.length === 0
+                      ? 'Todos os documentos já estão vinculados a algum caso'
+                      : 'Nenhum documento encontrado com esse termo'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredDocuments.map((doc) => (
+                    <label
+                      key={doc._id}
+                      className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedDocIds.includes(doc._id)}
+                        onChange={() => toggleSelectDoc(doc._id)}
+                        className="sr-only"
+                      />
+                      <div className="flex items-center gap-3 flex-1">
+                        {selectedDocIds.includes(doc._id) ? (
+                          <FaCheckSquare className="text-blue-600 text-lg flex-shrink-0" />
+                        ) : (
+                          <FaSquare className="text-gray-400 text-lg flex-shrink-0" />
+                        )}
+                        <FaFileAlt className="text-blue-500 text-xl flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {doc.originalName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-500">
+                              {doc.documentType || 'Não classificado'}
+                            </span>
+                            <span className="text-xs text-gray-400">•</span>
+                            <span className="text-xs text-gray-500">
+                              {(doc.size / 1024).toFixed(1)} KB
+                            </span>
+                            {doc.ocrStatus === 'completed' && (
+                              <>
+                                <span className="text-xs text-gray-400">•</span>
+                                <span className="text-xs text-green-600">✓ Processado</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowSelectModal(false);
+                  setSelectedDocIds([]);
+                  setSearchTerm('');
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                disabled={linkDocumentsMutation.isLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleLinkDocuments}
+                disabled={linkDocumentsMutation.isLoading || selectedDocIds.length === 0}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {linkDocumentsMutation.isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Vinculando...
+                  </>
+                ) : (
+                  <>
+                    <FaSave />
+                    Vincular Documentos ({selectedDocIds.length})
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Remoção de Documentos */}
+      {showRemoveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Remover Documentos do Caso</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Selecione os documentos que deseja desvincular do caso "{caseItem?.title}"
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRemoveModal(false);
+                  setSelectedDocIds([]);
+                  setRemoveSearchTerm('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes className="text-2xl" />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-4">
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome do arquivo ou tipo..."
+                  value={removeSearchTerm}
+                  onChange={(e) => setRemoveSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Select All Checkbox */}
+            {filteredCaseDocs.length > 0 && (
+              <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                <label className="flex items-center cursor-pointer">
+                  <button
+                    onClick={toggleSelectAllRemove}
+                    className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-red-600"
+                  >
+                    {selectedDocIds.length === filteredCaseDocs.length && filteredCaseDocs.length > 0 ? (
+                      <FaCheckSquare className="text-red-600 text-lg" />
+                    ) : (
+                      <FaSquare className="text-gray-400 text-lg" />
+                    )}
+                    Selecionar todos ({filteredCaseDocs.length})
+                  </button>
+                </label>
+                {selectedDocIds.length > 0 && (
+                  <span className="text-sm text-gray-600">
+                    {selectedDocIds.length} selecionado(s)
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Documents List */}
+            <div className="flex-1 overflow-y-auto mb-6">
+              {filteredCaseDocs.length === 0 ? (
+                <div className="text-center py-12">
+                  <FaFileAlt className="mx-auto text-gray-300 text-5xl mb-4" />
+                  <p className="text-gray-500">
+                    {caseDocsList.length === 0
+                      ? 'Nenhum documento vinculado a este caso'
+                      : 'Nenhum documento encontrado com esse termo'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredCaseDocs.map((doc) => (
+                    <label
+                      key={doc._id}
+                      className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-red-50 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedDocIds.includes(doc._id)}
+                        onChange={() => toggleSelectRemoveDoc(doc._id)}
+                        className="sr-only"
+                      />
+                      <div className="flex items-center gap-3 flex-1">
+                        {selectedDocIds.includes(doc._id) ? (
+                          <FaCheckSquare className="text-red-600 text-lg flex-shrink-0" />
+                        ) : (
+                          <FaSquare className="text-gray-400 text-lg flex-shrink-0" />
+                        )}
+                        <FaFileAlt className="text-blue-500 text-xl flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {doc.originalName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-500">
+                              {doc.documentType || 'Não classificado'}
+                            </span>
+                            <span className="text-xs text-gray-400">•</span>
+                            <span className="text-xs text-gray-500">
+                              {(doc.size / 1024).toFixed(1)} KB
+                            </span>
+                            {doc.ocrStatus === 'completed' && (
+                              <>
+                                <span className="text-xs text-gray-400">•</span>
+                                <span className="text-xs text-green-600">✓ Processado</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowRemoveModal(false);
+                  setSelectedDocIds([]);
+                  setRemoveSearchTerm('');
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                disabled={unlinkDocumentsMutation.isLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleUnlinkDocuments}
+                disabled={unlinkDocumentsMutation.isLoading || selectedDocIds.length === 0}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {unlinkDocumentsMutation.isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Removendo...
+                  </>
+                ) : (
+                  <>
+                    <FaTrash />
+                    Desvincular Documentos ({selectedDocIds.length})
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
