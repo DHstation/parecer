@@ -12,7 +12,6 @@ const caseSchema = new mongoose.Schema(
     },
     numeroProcesso: {
       type: String,
-      unique: true,
       sparse: true,
     },
 
@@ -103,7 +102,7 @@ const caseSchema = new mongoose.Schema(
 );
 
 // Índices
-caseSchema.index({ numeroProcesso: 1 });
+caseSchema.index({ numeroProcesso: 1 }, { unique: true, sparse: true });
 caseSchema.index({ areaJuridica: 1 });
 caseSchema.index({ status: 1 });
 caseSchema.index({ createdBy: 1 });

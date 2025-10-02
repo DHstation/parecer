@@ -10,7 +10,6 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
     },
     password: {
@@ -55,7 +54,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 // Índices
-userSchema.index({ email: 1 });
+userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 
 module.exports = mongoose.model('User', userSchema);

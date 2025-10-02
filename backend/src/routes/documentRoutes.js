@@ -28,13 +28,13 @@ const upload = multer({
 });
 
 // Rotas
-router.post('/upload', authenticate, upload.array('documents', 10), documentController.uploadDocuments);
-router.get('/', authenticate, documentController.listDocuments);
-router.get('/search', authenticate, documentController.searchDocuments);
-router.post('/ask', authenticate, documentController.askQuestion);
-router.get('/:id', authenticate, documentController.getDocument);
-router.get('/:id/download', authenticate, documentController.downloadDocument);
-router.post('/:id/reprocess', authenticate, documentController.reprocessOCR);
-router.delete('/:id', authenticate, documentController.deleteDocument);
+router.post('/upload', authenticate, upload.array('documents', 10), documentController.uploadDocuments.bind(documentController));
+router.get('/', authenticate, documentController.listDocuments.bind(documentController));
+router.get('/search', authenticate, documentController.searchDocuments.bind(documentController));
+router.post('/ask', authenticate, documentController.askQuestion.bind(documentController));
+router.get('/:id', authenticate, documentController.getDocument.bind(documentController));
+router.get('/:id/download', authenticate, documentController.downloadDocument.bind(documentController));
+router.post('/:id/reprocess', authenticate, documentController.reprocessOCR.bind(documentController));
+router.delete('/:id', authenticate, documentController.deleteDocument.bind(documentController));
 
 module.exports = router;
