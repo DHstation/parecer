@@ -1,6 +1,7 @@
 import '../styles/globals.css';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
+import Layout from '../components/Layout';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -14,7 +15,9 @@ const queryClient = new QueryClient({
 function MyApp({ Component, pageProps }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Component {...pageProps} />
+      <Layout title={pageProps.title || 'Parecer'}>
+        <Component {...pageProps} />
+      </Layout>
       <Toaster position="top-right" />
     </QueryClientProvider>
   );
