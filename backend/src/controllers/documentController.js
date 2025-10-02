@@ -20,6 +20,9 @@ class DocumentController {
       const uploadedDocuments = [];
 
       for (const file of req.files) {
+        // Corrigir encoding do nome do arquivo (UTF-8)
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
         // Upload para MinIO
         const storageResult = await storageService.uploadFile(
           file,
@@ -29,7 +32,7 @@ class DocumentController {
         // Criar documento no MongoDB
         const document = await Document.create({
           filename: storageResult.filename,
-          originalName: file.originalname,
+          originalName: originalName,
           mimeType: file.mimetype,
           size: file.size,
           minioPath: storageResult.filePath,
