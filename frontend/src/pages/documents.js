@@ -52,19 +52,6 @@ export default function Documents() {
     }
   );
 
-  const deleteMutation = useMutation(
-    (id) => documents.delete(id),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('documents');
-        toast.success('Documento excluído com sucesso!');
-      },
-      onError: (error) => {
-        toast.error('Erro ao excluir documento');
-      }
-    }
-  );
-
   const bulkDeleteMutation = useMutation(
     async (ids) => {
       // Deletar múltiplos documentos em paralelo
@@ -189,8 +176,11 @@ export default function Documents() {
     { value: 'contestacao', label: 'Contestação' },
     { value: 'sentenca', label: 'Sentença' },
     { value: 'acordao', label: 'Acórdão' },
+    { value: 'despacho', label: 'Despacho' },
+    { value: 'parecer', label: 'Parecer' },
     { value: 'contrato', label: 'Contrato' },
     { value: 'procuracao', label: 'Procuração' },
+    { value: 'documento_pessoal', label: 'Documento Pessoal' },
     { value: 'outro', label: 'Outro' },
   ];
 
