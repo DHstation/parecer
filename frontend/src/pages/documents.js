@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { documents } from '../services/api';
-import { FaUpload, FaFileAlt, FaSearch, FaSpinner, FaFilter, FaDownload, FaTimes, FaTrash, FaCheckSquare, FaSquare } from 'react-icons/fa';
+import { FaUpload, FaFileAlt, FaSearch, FaSpinner, FaFilter, FaDownload, FaTimes, FaTrash, FaCheckSquare, FaSquare, FaSyncAlt } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { useDropzone } from 'react-dropzone';
 
@@ -27,7 +27,18 @@ export default function Documents() {
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Estado para auto-refresh
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [isClient, setIsClient] = useState(false);
+
   const limit = 20;
+
+  // Detectar se está no cliente (evitar erro de hidratação)
+  useEffect(() => {
+    setIsClient(true);
+    setLastRefresh(new Date());
+  }, []);
 
   const { data, isLoading } = useQuery(
     ['documents', page, filters],
@@ -36,8 +47,33 @@ export default function Documents() {
       limit,
       ocrStatus: filters.ocrStatus !== 'all' ? filters.ocrStatus : undefined,
       documentType: filters.documentType !== 'all' ? filters.documentType : undefined,
-    })
+    }),
+    {
+      refetchInterval: autoRefresh ? 4000 : false, // Auto-refresh a cada 4 segundos se ativado
+      refetchIntervalInBackground: false, // Não atualizar quando a aba estiver em background
+    }
   );
+
+  // Atualizar timestamp do último refresh
+  useEffect(() => {
+    if (data && isClient) {
+      setLastRefresh(new Date());
+    }
+  }, [data, isClient]);
+
+  // Detectar se há documentos sendo processados
+  const hasProcessingDocs = useMemo(() => {
+    return data?.data?.documents?.some(doc =>
+      doc.ocrStatus === 'processing' || doc.ocrStatus === 'pending'
+    ) || false;
+  }, [data]);
+
+  // Ativar auto-refresh automaticamente se houver documentos sendo processados
+  useEffect(() => {
+    if (hasProcessingDocs && !autoRefresh) {
+      setAutoRefresh(true);
+    }
+  }, [hasProcessingDocs, autoRefresh]);
 
   const uploadMutation = useMutation(
     (formData) => documents.upload(formData),
@@ -216,9 +252,40 @@ export default function Documents() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Documentos</h1>
-              <p className="text-gray-600 mt-1">Upload e análise de documentos</p>
+              <div className="flex items-center gap-3 mt-1">
+                <p className="text-gray-600">Upload e análise de documentos</p>
+                {hasProcessingDocs && (
+                  <span className="flex items-center gap-2 text-sm text-blue-600">
+                    <FaSpinner className="animate-spin" />
+                    Processando documentos...
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
+              {/* Indicador de Auto-refresh */}
+              <div className="flex items-center gap-2 text-sm">
+                <button
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                    autoRefresh
+                      ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                      : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                  }`}
+                  title={autoRefresh ? 'Auto-refresh ativado' : 'Auto-refresh desativado'}
+                >
+                  <FaSyncAlt className={autoRefresh ? 'animate-spin' : ''} />
+                  <span className="hidden md:inline">
+                    {autoRefresh ? 'Atualizando...' : 'Pausado'}
+                  </span>
+                </button>
+                {isClient && lastRefresh && (
+                  <span className="text-xs text-gray-500 hidden md:inline">
+                    {lastRefresh.toLocaleTimeString('pt-BR')}
+                  </span>
+                )}
+              </div>
+
               {selectedDocs.length > 0 && (
                 <button
                   onClick={handleBulkDelete}
