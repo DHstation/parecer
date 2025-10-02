@@ -301,6 +301,42 @@ class DocumentController {
       res.status(500).json({ error: 'Failed to delete document' });
     }
   }
+
+  /**
+   * Estatísticas dos documentos
+   */
+  async getStats(req, res) {
+    try {
+      const totalDocs = await Document.countDocuments({ isActive: true });
+      const processedDocs = await Document.countDocuments({
+        isActive: true,
+        ocrStatus: 'completed'
+      });
+      const processingDocs = await Document.countDocuments({
+        isActive: true,
+        ocrStatus: 'processing'
+      });
+      const failedDocs = await Document.countDocuments({
+        isActive: true,
+        ocrStatus: 'failed'
+      });
+      const pendingDocs = await Document.countDocuments({
+        isActive: true,
+        ocrStatus: 'pending'
+      });
+
+      res.json({
+        total: totalDocs,
+        processed: processedDocs,
+        processing: processingDocs,
+        failed: failedDocs,
+        pending: pendingDocs,
+      });
+    } catch (error) {
+      console.error('Error getting document stats:', error);
+      res.status(500).json({ error: 'Failed to get document stats' });
+    }
+  }
 }
 
 module.exports = new DocumentController();

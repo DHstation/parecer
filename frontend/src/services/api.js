@@ -47,6 +47,7 @@ export const documents = {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   list: (params) => api.get('/documents', { params }),
+  stats: () => api.get('/documents/stats'),
   get: (id) => api.get(`/documents/${id}`),
   download: (id) => api.get(`/documents/${id}/download`),
   update: (id, data) => api.put(`/documents/${id}`, data),

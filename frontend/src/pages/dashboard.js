@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery } from 'react-query';
-import { cases, documents } from '../services/api';
+import { cases, documents, questionnaires } from '../services/api';
 import { FaFileAlt, FaFolder, FaQuestionCircle, FaChartLine } from 'react-icons/fa';
 
 export default function Dashboard() {
@@ -16,6 +16,8 @@ export default function Dashboard() {
 
   const { data: casesData } = useQuery('cases', () => cases.list({ limit: 5 }));
   const { data: documentsData } = useQuery('documents', () => documents.list({ limit: 5 }));
+  const { data: documentsStats } = useQuery('documents-stats', () => documents.stats());
+  const { data: questionnairesData } = useQuery('questionnaires', () => questionnaires.list({ limit: 1 }));
 
   const stats = [
     {
@@ -26,19 +28,19 @@ export default function Dashboard() {
     },
     {
       name: 'Documentos',
-      value: documentsData?.data?.total || 0,
+      value: documentsStats?.data?.total || 0,
       icon: FaFileAlt,
       color: 'bg-green-500',
     },
     {
       name: 'Processados',
-      value: documentsData?.data?.documents?.filter(d => d.ocrStatus === 'completed').length || 0,
+      value: documentsStats?.data?.processed || 0,
       icon: FaChartLine,
       color: 'bg-purple-500',
     },
     {
       name: 'Questionários',
-      value: 0,
+      value: questionnairesData?.data?.total || 0,
       icon: FaQuestionCircle,
       color: 'bg-orange-500',
     },
@@ -76,7 +78,10 @@ export default function Dashboard() {
         {/* Recent Cases */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Casos Recentes</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Casos Recentes</h2>
+              <span className="text-sm text-gray-500">(5 mais recentes)</span>
+            </div>
             <div className="space-y-3">
               {casesData?.data?.cases?.slice(0, 5).map((caseItem) => (
                 <div
@@ -113,7 +118,10 @@ export default function Dashboard() {
 
           {/* Recent Documents */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Documentos Recentes</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Documentos Recentes</h2>
+              <span className="text-sm text-gray-500">(5 mais recentes)</span>
+            </div>
             <div className="space-y-3">
               {documentsData?.data?.documents?.slice(0, 5).map((doc) => (
                 <div
