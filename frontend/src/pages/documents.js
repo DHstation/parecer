@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { documents } from '../services/api';
-import { FaUpload, FaFileAlt, FaSearch, FaSpinner, FaFilter, FaDownload, FaTimes } from 'react-icons/fa';
+import { FaUpload, FaFileAlt, FaSearch, FaSpinner, FaFilter, FaDownload, FaTimes, FaTrash, FaCheckSquare, FaSquare } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { useDropzone } from 'react-dropzone';
 
@@ -18,6 +18,10 @@ export default function Documents() {
     ocrStatus: 'all',
     documentType: 'all',
   });
+
+  // Estados para seleção múltipla
+  const [selectedDocs, setSelectedDocs] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const limit = 20;
 
@@ -44,6 +48,38 @@ export default function Documents() {
       onError: (error) => {
         toast.error(error.response?.data?.error || 'Erro ao enviar documentos');
         setUploadProgress({});
+      }
+    }
+  );
+
+  const deleteMutation = useMutation(
+    (id) => documents.delete(id),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('documents');
+        toast.success('Documento excluído com sucesso!');
+      },
+      onError: (error) => {
+        toast.error('Erro ao excluir documento');
+      }
+    }
+  );
+
+  const bulkDeleteMutation = useMutation(
+    async (ids) => {
+      // Deletar múltiplos documentos em paralelo
+      await Promise.all(ids.map(id => documents.delete(id)));
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('documents');
+        setSelectedDocs([]);
+        setShowDeleteConfirm(false);
+        toast.success(`${selectedDocs.length} documento(s) excluído(s) com sucesso!`);
+      },
+      onError: (error) => {
+        toast.error('Erro ao excluir documentos');
+        setShowDeleteConfirm(false);
       }
     }
   );
@@ -92,6 +128,37 @@ export default function Documents() {
 
   const removeFile = (index) => {
     setSelectedFiles(files => files.filter((_, i) => i !== index));
+  };
+
+  // Funções de seleção múltipla
+  const toggleSelectDoc = (docId) => {
+    setSelectedDocs(prev => {
+      if (prev.includes(docId)) {
+        return prev.filter(id => id !== docId);
+      } else {
+        return [...prev, docId];
+      }
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedDocs.length === filteredDocs.length && filteredDocs.length > 0) {
+      setSelectedDocs([]);
+    } else {
+      setSelectedDocs(filteredDocs.map(doc => doc._id));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocs.length === 0) {
+      toast.error('Selecione pelo menos um documento');
+      return;
+    }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmBulkDelete = () => {
+    bulkDeleteMutation.mutate(selectedDocs);
   };
 
   // Busca local nos dados já carregados
@@ -145,12 +212,22 @@ export default function Documents() {
               <h1 className="text-3xl font-bold text-gray-900">Documentos</h1>
               <p className="text-gray-600 mt-1">Upload e análise de documentos</p>
             </div>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <FaUpload /> Upload
-            </button>
+            <div className="flex gap-3">
+              {selectedDocs.length > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition-all"
+                >
+                  <FaTrash /> Excluir ({selectedDocs.length})
+                </button>
+              )}
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <FaUpload /> Upload
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -238,6 +315,19 @@ export default function Documents() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-6 py-3 text-left">
+                      <button
+                        onClick={toggleSelectAll}
+                        className="text-gray-600 hover:text-gray-900 transition-colors"
+                        title={selectedDocs.length === filteredDocs.length && filteredDocs.length > 0 ? "Desmarcar todos" : "Selecionar todos"}
+                      >
+                        {selectedDocs.length === filteredDocs.length && filteredDocs.length > 0 ? (
+                          <FaCheckSquare className="w-5 h-5" />
+                        ) : (
+                          <FaSquare className="w-5 h-5" />
+                        )}
+                      </button>
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Nome do Arquivo
                     </th>
@@ -264,6 +354,18 @@ export default function Documents() {
                       key={doc._id}
                       className="hover:bg-gray-50 transition-colors"
                     >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => toggleSelectDoc(doc._id)}
+                          className="text-gray-600 hover:text-gray-900 transition-colors"
+                        >
+                          {selectedDocs.includes(doc._id) ? (
+                            <FaCheckSquare className="w-5 h-5 text-blue-600" />
+                          ) : (
+                            <FaSquare className="w-5 h-5" />
+                          )}
+                        </button>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div
                           onClick={() => router.push(`/documents/${doc._id}`)}
@@ -428,6 +530,55 @@ export default function Documents() {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 {uploadProgress.uploading ? 'Enviando...' : 'Fazer Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <FaTrash className="text-red-600 text-xl" />
+              </div>
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+              Confirmar Exclusão
+            </h2>
+
+            <p className="text-gray-600 text-center mb-6">
+              Tem certeza que deseja excluir <span className="font-bold">{selectedDocs.length}</span> documento(s)?
+              Esta ação não pode ser desfeita.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={bulkDeleteMutation.isLoading}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmBulkDelete}
+                disabled={bulkDeleteMutation.isLoading}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {bulkDeleteMutation.isLoading ? (
+                  <>
+                    <FaSpinner className="animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  <>
+                    <FaTrash />
+                    Excluir
+                  </>
+                )}
               </button>
             </div>
           </div>
