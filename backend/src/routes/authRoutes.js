@@ -4,9 +4,9 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.post('/register', authController.register);
-router.post('/login', authController.login);
-router.get('/profile', authenticate, authController.getProfile);
-router.put('/profile', authenticate, authController.updateProfile);
+router.post('/register', authController.register.bind(authController));
+router.post('/login', authController.login.bind(authController));
+router.get('/profile', authenticate, authController.getProfile.bind(authController));
+router.put('/profile', authenticate, authController.updateProfile.bind(authController));
 
 module.exports = router;
