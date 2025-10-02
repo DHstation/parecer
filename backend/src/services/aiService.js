@@ -378,10 +378,10 @@ Retorne apenas este JSON (sem markdown, sem explicações):
         console.log('📝 Generating case summary...');
 
         const documentsText = documents
-          .map((doc) => `[${doc.documentType}]\n${doc.summary || doc.ocrText?.slice(0, 1000)}`)
+          .map((doc) => `[${doc.documentType}]\n${doc.summary || doc.ocrText?.slice(0, 800)}`)
           .join('\n\n---\n\n');
 
-        const prompt = `Gere um resumo executivo completo do seguinte caso jurídico:
+        const prompt = `Gere um resumo SIMPLES e CURTO (máximo 2-3 frases) do seguinte caso jurídico:
 
 Informações do Caso:
 ${JSON.stringify(caseInfo, null, 2)}
@@ -389,16 +389,13 @@ ${JSON.stringify(caseInfo, null, 2)}
 Documentos:
 ${documentsText}
 
-Gere um resumo executivo que inclua:
-1. Panorama geral do caso
-2. Partes envolvidas
-3. Linha do tempo dos eventos principais
-4. Questões jurídicas centrais
-5. Pontos críticos a serem analisados
-6. Riscos identificados
-7. Oportunidades
+IMPORTANTE:
+- Máximo 2-3 frases curtas
+- Estilo objetivo e direto
+- Mencione apenas: tipo de ação, partes principais e objeto principal
+- Exemplo: "Ação de cobrança de honorários por prestação de serviços entre João Silva e Tech Solutions LTDA."
 
-Retorne em formato de texto estruturado e profissional.`;
+Retorne APENAS o resumo, sem introduções ou seções.`;
 
         const response = await axios.post(
           `${this.mistralApiUrl}/chat/completions`,
@@ -407,14 +404,14 @@ Retorne em formato de texto estruturado e profissional.`;
             messages: [
               {
                 role: 'system',
-                content: 'Você é um advogado sênior gerando resumos executivos de casos.',
+                content: 'Você é um assistente que gera resumos curtos e objetivos de casos jurídicos. Responda APENAS com o resumo, sem introduções.',
               },
               {
                 role: 'user',
                 content: prompt,
               },
             ],
-            max_tokens: 2048,
+            max_tokens: 400,
             temperature: 0.3,
           },
           {

@@ -141,7 +141,7 @@ class CaseController {
       });
 
       if (processedDocs.length === 0) {
-        return res.status(400).json({ error: 'No processed documents available for this case' });
+        return res.status(400).json({ error: 'Nenhum documento processado disponível para este caso' });
       }
 
       console.log(`Generating summary for case ${id} with ${processedDocs.length} documents`);
