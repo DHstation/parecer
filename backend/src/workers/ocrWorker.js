@@ -134,10 +134,16 @@ analysisQueue.process('analyze-document', async (job) => {
     document.analysisStatus = 'processing';
     await document.save();
 
-    // Classificar tipo de documento
+    // ETAPA 1: Classificar tipo de documento (RÁPIDO)
     const classification = await aiService.classifyDocument(document.ocrText);
 
-    // Analisar e extrair dados
+    // Salvar tipo imediatamente (para exibição rápida)
+    document.documentType = classification.type;
+    document.confidence = classification.confidence;
+    await document.save();
+    console.log(`Document type saved: ${classification.type} (${Math.round(classification.confidence * 100)}%)`);
+
+    // ETAPA 2: Analisar e extrair dados detalhados (LENTO)
     const analysis = await aiService.analyzeDocument(
       document.ocrText,
       classification.type
@@ -146,9 +152,7 @@ analysisQueue.process('analyze-document', async (job) => {
     // Sanitizar dados extraídos (remover placeholders)
     const sanitizedData = sanitizeExtractedData(analysis);
 
-    // Atualizar documento
-    document.documentType = classification.type;
-    document.confidence = classification.confidence;
+    // Atualizar documento com análise completa
     document.extractedData = sanitizedData;
     document.summary = analysis.summary;
     document.keyPoints = analysis.keyPoints || [];
