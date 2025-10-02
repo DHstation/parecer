@@ -101,24 +101,31 @@ class AIService {
    * Construir prompt para análise baseado no tipo de documento
    */
   buildAnalysisPrompt(text, documentType) {
-    const basePrompt = `Analise o seguinte documento jurídico e extraia as informações em formato JSON:
+    const basePrompt = `Analise o seguinte documento jurídico e extraia APENAS as informações REAIS que estão no texto.
 
+IMPORTANTE:
+- Se uma informação NÃO estiver presente no documento, use null ou array vazio []
+- NÃO use placeholders como "[valor]", "[data]", "[nome]"
+- NÃO invente informações
+- Extraia APENAS dados concretos que aparecem no texto
+
+Documento:
 ${text.slice(0, 8000)}
 
-Retorne um JSON com a seguinte estrutura:
+Retorne JSON válido com esta estrutura (use null/[] para dados ausentes):
 {
-  "documentType": "tipo do documento",
+  "documentType": "tipo identificado",
   "confidence": 0.0-1.0,
-  "summary": "resumo executivo do documento",
-  "keyPoints": ["ponto 1", "ponto 2"],
-  "partes": [{"tipo": "autor/reu", "nome": "...", "cpfCnpj": "..."}],
-  "advogados": [{"nome": "...", "oab": "..."}],
-  "numeroProcesso": "...",
-  "datas": [{"tipo": "...", "data": "YYYY-MM-DD", "descricao": "..."}],
-  "valores": [{"tipo": "...", "valor": 0.0}],
-  "assunto": "...",
-  "pedidos": ["pedido 1", "pedido 2"],
-  "fundamentosLegais": ["art. X lei Y", "art. Z lei W"]
+  "summary": "resumo do que está escrito",
+  "keyPoints": ["pontos principais REAIS do texto"],
+  "partes": [{"tipo": "autor/reu", "nome": "nome real", "cpfCnpj": "cpf/cnpj real"}],
+  "advogados": [{"nome": "nome real", "oab": "número real"}],
+  "numeroProcesso": "número real ou null",
+  "datas": [{"tipo": "descrição", "data": "YYYY-MM-DD real", "descricao": "contexto"}],
+  "valores": [{"tipo": "descrição", "valor": numero_real}],
+  "assunto": "assunto identificado ou null",
+  "pedidos": ["pedidos REAIS do documento"],
+  "fundamentosLegais": ["leis/artigos CITADOS no texto"]
 }`;
 
     return basePrompt;

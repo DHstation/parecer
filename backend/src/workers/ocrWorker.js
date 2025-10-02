@@ -5,6 +5,52 @@ const ocrService = require('../services/ocrService');
 const aiService = require('../services/aiService');
 
 /**
+ * Sanitizar dados extraídos removendo placeholders da IA
+ */
+function sanitizeExtractedData(analysis) {
+  // Função auxiliar para verificar se é placeholder
+  const isPlaceholder = (value) => {
+    if (!value) return true;
+    const str = String(value).toLowerCase();
+    return str.includes('[') && str.includes(']') ||
+           str.includes('exemplo') ||
+           str.includes('placeholder') ||
+           str === 'null' ||
+           str === 'undefined';
+  };
+
+  // Sanitizar datas
+  const datas = (analysis.datas || [])
+    .filter(d => d && d.data && !isPlaceholder(d.data))
+    .map(d => ({
+      tipo: d.tipo || 'Outro',
+      data: new Date(d.data),
+      descricao: d.descricao || ''
+    }))
+    .filter(d => !isNaN(d.data.getTime())); // Remove datas inválidas
+
+  // Sanitizar valores
+  const valores = (analysis.valores || [])
+    .filter(v => v && v.valor !== undefined && !isPlaceholder(v.valor))
+    .map(v => ({
+      tipo: v.tipo || 'Outro',
+      valor: parseFloat(v.valor) || 0
+    }))
+    .filter(v => !isNaN(v.valor) && v.valor > 0);
+
+  return {
+    partes: analysis.partes || [],
+    advogados: analysis.advogados || [],
+    numeroProcesso: isPlaceholder(analysis.numeroProcesso) ? null : analysis.numeroProcesso,
+    datas,
+    valores,
+    assunto: isPlaceholder(analysis.assunto) ? 'Não identificado' : analysis.assunto,
+    pedidos: analysis.pedidos || [],
+    fundamentosLegais: analysis.fundamentosLegais || [],
+  };
+}
+
+/**
  * Worker para processar OCR de documentos
  */
 ocrQueue.process('process-ocr', async (job) => {
@@ -97,19 +143,13 @@ analysisQueue.process('analyze-document', async (job) => {
       classification.type
     );
 
+    // Sanitizar dados extraídos (remover placeholders)
+    const sanitizedData = sanitizeExtractedData(analysis);
+
     // Atualizar documento
     document.documentType = classification.type;
     document.confidence = classification.confidence;
-    document.extractedData = {
-      partes: analysis.partes || [],
-      advogados: analysis.advogados || [],
-      numeroProcesso: analysis.numeroProcesso,
-      datas: analysis.datas || [],
-      valores: analysis.valores || [],
-      assunto: analysis.assunto,
-      pedidos: analysis.pedidos || [],
-      fundamentosLegais: analysis.fundamentosLegais || [],
-    };
+    document.extractedData = sanitizedData;
     document.summary = analysis.summary;
     document.keyPoints = analysis.keyPoints || [];
     document.analysisStatus = 'completed';
