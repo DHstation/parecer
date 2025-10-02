@@ -17,6 +17,18 @@ export default function CaseDetails() {
   const [searchTerm, setSearchTerm] = useState('');
   const [removeSearchTerm, setRemoveSearchTerm] = useState('');
 
+  // Filtros do modal de adicionar
+  const [addFilters, setAddFilters] = useState({
+    ocrStatus: 'all',
+    documentType: 'all',
+  });
+
+  // Filtros do modal de remover
+  const [removeFilters, setRemoveFilters] = useState({
+    ocrStatus: 'all',
+    documentType: 'all',
+  });
+
   const { data: caseData, isLoading } = useQuery(
     ['case', id],
     () => cases.get(id),
@@ -127,16 +139,31 @@ export default function CaseDetails() {
     return allDocs.filter(doc => !currentCaseDocIds.includes(doc._id));
   }, [allDocs, currentCaseDocIds]);
 
-  // Filtrar por busca
+  // Filtrar por busca e filtros (modal adicionar)
   const filteredDocuments = useMemo(() => {
-    if (!searchTerm) return availableDocuments;
+    let filtered = availableDocuments;
 
-    const term = searchTerm.toLowerCase();
-    return availableDocuments.filter(doc =>
-      doc.originalName?.toLowerCase().includes(term) ||
-      doc.documentType?.toLowerCase().includes(term)
-    );
-  }, [availableDocuments, searchTerm]);
+    // Filtrar por status OCR
+    if (addFilters.ocrStatus !== 'all') {
+      filtered = filtered.filter(doc => doc.ocrStatus === addFilters.ocrStatus);
+    }
+
+    // Filtrar por tipo de documento
+    if (addFilters.documentType !== 'all') {
+      filtered = filtered.filter(doc => doc.documentType === addFilters.documentType);
+    }
+
+    // Filtrar por busca
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(doc =>
+        doc.originalName?.toLowerCase().includes(term) ||
+        doc.documentType?.toLowerCase().includes(term)
+      );
+    }
+
+    return filtered;
+  }, [availableDocuments, searchTerm, addFilters]);
 
   const toggleSelectDoc = (docId) => {
     setSelectedDocIds(prev => {
@@ -192,16 +219,31 @@ export default function CaseDetails() {
   // Documentos vinculados ao caso atual
   const caseDocsList = caseDocuments?.data?.documents || [];
 
-  // Filtrar documentos do caso por busca (modal de remover)
+  // Filtrar documentos do caso por busca e filtros (modal de remover)
   const filteredCaseDocs = useMemo(() => {
-    if (!removeSearchTerm) return caseDocsList;
+    let filtered = caseDocsList;
 
-    const term = removeSearchTerm.toLowerCase();
-    return caseDocsList.filter(doc =>
-      doc.originalName?.toLowerCase().includes(term) ||
-      doc.documentType?.toLowerCase().includes(term)
-    );
-  }, [caseDocsList, removeSearchTerm]);
+    // Filtrar por status OCR
+    if (removeFilters.ocrStatus !== 'all') {
+      filtered = filtered.filter(doc => doc.ocrStatus === removeFilters.ocrStatus);
+    }
+
+    // Filtrar por tipo de documento
+    if (removeFilters.documentType !== 'all') {
+      filtered = filtered.filter(doc => doc.documentType === removeFilters.documentType);
+    }
+
+    // Filtrar por busca
+    if (removeSearchTerm) {
+      const term = removeSearchTerm.toLowerCase();
+      filtered = filtered.filter(doc =>
+        doc.originalName?.toLowerCase().includes(term) ||
+        doc.documentType?.toLowerCase().includes(term)
+      );
+    }
+
+    return filtered;
+  }, [caseDocsList, removeSearchTerm, removeFilters]);
 
   const toggleSelectRemoveDoc = (docId) => {
     setSelectedDocIds(prev => {
@@ -588,6 +630,42 @@ export default function CaseDetails() {
               </div>
             </div>
 
+            {/* Filters */}
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Status OCR</label>
+                <select
+                  value={addFilters.ocrStatus}
+                  onChange={(e) => setAddFilters({ ...addFilters, ocrStatus: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Todos</option>
+                  <option value="pending">Pendente</option>
+                  <option value="processing">Processando</option>
+                  <option value="completed">Concluído</option>
+                  <option value="failed">Falhou</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de Documento</label>
+                <select
+                  value={addFilters.documentType}
+                  onChange={(e) => setAddFilters({ ...addFilters, documentType: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Todos os Tipos</option>
+                  <option value="peticao_inicial">Petição Inicial</option>
+                  <option value="contestacao">Contestação</option>
+                  <option value="sentenca">Sentença</option>
+                  <option value="acordao">Acórdão</option>
+                  <option value="despacho">Despacho</option>
+                  <option value="parecer">Parecer</option>
+                  <option value="documento_pessoal">Documento Pessoal</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+            </div>
+
             {/* Select All Checkbox */}
             {filteredDocuments.length > 0 && (
               <div className="flex items-center justify-between mb-4 pb-3 border-b">
@@ -739,6 +817,42 @@ export default function CaseDetails() {
                   onChange={(e) => setRemoveSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Status OCR</label>
+                <select
+                  value={removeFilters.ocrStatus}
+                  onChange={(e) => setRemoveFilters({ ...removeFilters, ocrStatus: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Todos</option>
+                  <option value="pending">Pendente</option>
+                  <option value="processing">Processando</option>
+                  <option value="completed">Concluído</option>
+                  <option value="failed">Falhou</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de Documento</label>
+                <select
+                  value={removeFilters.documentType}
+                  onChange={(e) => setRemoveFilters({ ...removeFilters, documentType: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Todos os Tipos</option>
+                  <option value="peticao_inicial">Petição Inicial</option>
+                  <option value="contestacao">Contestação</option>
+                  <option value="sentenca">Sentença</option>
+                  <option value="acordao">Acórdão</option>
+                  <option value="despacho">Despacho</option>
+                  <option value="parecer">Parecer</option>
+                  <option value="documento_pessoal">Documento Pessoal</option>
+                  <option value="outro">Outro</option>
+                </select>
               </div>
             </div>
 
