@@ -47,7 +47,7 @@ const upload = multer({
 });
 
 // Rotas
-router.post('/upload', authenticate, uploadLimiter, upload.array('documents', 10), documentController.uploadDocuments.bind(documentController));
+router.post('/upload', authenticate, uploadLimiter, upload.array('documents', 20), documentController.uploadDocuments.bind(documentController));
 router.get('/', authenticate, documentController.listDocuments.bind(documentController));
 router.get('/search', authenticate, searchLimiter, documentController.searchDocuments.bind(documentController));
 router.post('/ask', authenticate, searchLimiter, documentController.askQuestion.bind(documentController));

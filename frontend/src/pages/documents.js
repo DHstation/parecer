@@ -77,7 +77,9 @@ export default function Documents() {
       'image/png': ['.png'],
       'image/jpeg': ['.jpg', '.jpeg']
     },
-    maxSize: 50 * 1024 * 1024, // 50MB
+    maxSize: 50 * 1024 * 1024, // 50MB por arquivo
+    maxFiles: 20, // Máximo de 20 arquivos por upload
+    multiple: true, // Permite seleção múltipla
     onDrop: (acceptedFiles, rejectedFiles) => {
       if (rejectedFiles.length > 0) {
         const errors = rejectedFiles.map(f => {
@@ -87,13 +89,18 @@ export default function Documents() {
           if (f.errors.find(e => e.code === 'file-invalid-type')) {
             return `${f.file.name} tem tipo inválido`;
           }
+          if (f.errors.find(e => e.code === 'too-many-files')) {
+            return `Máximo de 20 arquivos por upload`;
+          }
           return `${f.file.name} inválido`;
         });
         toast.error(errors.join(', '));
       }
 
       if (acceptedFiles.length > 0) {
-        setSelectedFiles(acceptedFiles);
+        // Adicionar aos arquivos existentes ao invés de substituir
+        setSelectedFiles(prev => [...prev, ...acceptedFiles]);
+        toast.success(`${acceptedFiles.length} arquivo(s) adicionado(s)`);
       }
     }
   });
@@ -458,6 +465,9 @@ export default function Documents() {
                   </p>
                   <p className="text-sm text-gray-500">
                     Suportado: PDF, PNG, JPG (máx. 50MB por arquivo)
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Você pode selecionar até 20 arquivos de uma vez
                   </p>
                 </div>
               )}
