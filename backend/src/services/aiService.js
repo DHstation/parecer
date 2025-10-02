@@ -9,11 +9,46 @@ class AIService {
     // Modelo a ser usado (oficial usa mistral-large, local usa Pixtral)
     this.model = this.useOfficialAPI ? 'mistral-large-latest' : 'mistralai/Pixtral-12B-2409';
 
+    // Rate limiting para evitar exceder limites da API
+    this.lastApiCall = 0;
+    this.minDelayBetweenCalls = 6000; // 6 segundos entre chamadas (10 req/min = seguro)
+    this.requestQueue = Promise.resolve();
+
     if (this.mistralApiKey) {
       console.log('✓ Using Mistral Official API for AI analysis');
+      console.log(`⏱ Rate limiting enabled: ${this.minDelayBetweenCalls/1000}s between API calls`);
     } else {
       console.warn('⚠ Mistral API Key not configured - AI analysis will use fallback methods');
     }
+  }
+
+  /**
+   * Aguardar delay necessário para rate limiting
+   */
+  async waitForRateLimit() {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCall;
+
+    if (timeSinceLastCall < this.minDelayBetweenCalls) {
+      const waitTime = this.minDelayBetweenCalls - timeSinceLastCall;
+      console.log(`⏳ Rate limit: waiting ${(waitTime/1000).toFixed(1)}s before next API call`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    this.lastApiCall = Date.now();
+  }
+
+  /**
+   * Enfileirar chamada à API com rate limiting
+   */
+  async queueApiCall(apiFunction) {
+    // Adicionar à fila sequencial
+    this.requestQueue = this.requestQueue.then(async () => {
+      await this.waitForRateLimit();
+      return apiFunction();
+    });
+
+    return this.requestQueue;
   }
 
   /**
@@ -52,7 +87,7 @@ class AIService {
   }
 
   /**
-   * Analisar documento e extrair informações estruturadas
+   * Analisar documento e extrair informações estruturadas (COM RATE LIMITING)
    */
   async analyzeDocument(text, documentType) {
     try {
@@ -62,34 +97,40 @@ class AIService {
 
       const prompt = this.buildAnalysisPrompt(text, documentType);
 
-      const response = await axios.post(
-        `${this.mistralApiUrl}/chat/completions`,
-        {
-          model: this.model,
-          messages: [
-            {
-              role: 'system',
-              content: `Você é um assistente jurídico especializado em análise de documentos.
-              Extraia informações estruturadas e relevantes de documentos jurídicos.
-              IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem código de formatação.`,
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          max_tokens: 2048,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-        },
-        {
-          timeout: 90000,
-          headers: this.getHeaders(),
-        }
-      );
+      // Enfileirar chamada com rate limiting
+      const analysis = await this.queueApiCall(async () => {
+        console.log('📊 Analyzing document...');
 
-      const content = response.data.choices[0].message.content;
-      const analysis = this.parseJSONFromMarkdown(content);
+        const response = await axios.post(
+          `${this.mistralApiUrl}/chat/completions`,
+          {
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: `Você é um assistente jurídico especializado em análise de documentos.
+                Extraia informações estruturadas e relevantes de documentos jurídicos.
+                IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem código de formatação.`,
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            max_tokens: 2048,
+            temperature: 0.2,
+            response_format: { type: 'json_object' },
+          },
+          {
+            timeout: 90000,
+            headers: this.getHeaders(),
+          }
+        );
+
+        const content = response.data.choices[0].message.content;
+        return this.parseJSONFromMarkdown(content);
+      });
+
       return analysis;
     } catch (error) {
       console.error('Error analyzing document:', error.response?.data || error.message);
@@ -135,18 +176,21 @@ Retorne JSON válido com esta estrutura (use null/[] para dados ausentes):
    * Gerar questionário baseado no conteúdo do documento
    */
   async generateQuestionnaire(documents, caseContext = {}) {
-    try {
-      if (!this.mistralApiKey) {
-        return this.getFallbackQuestionnaire();
-      }
+    return this.queueApiCall(async () => {
+      console.log('📝 Generating questionnaire...');
 
-      // Combinar texto dos documentos
-      const combinedText = documents
-        .map((doc) => `[${doc.documentType}] ${doc.ocrText}`)
-        .join('\n\n---\n\n')
-        .slice(0, 10000);
+      try {
+        if (!this.mistralApiKey) {
+          return this.getFallbackQuestionnaire();
+        }
 
-      const prompt = `Com base nos seguintes documentos jurídicos, gere um questionário completo para auxiliar na elaboração de um parecer:
+        // Combinar texto dos documentos
+        const combinedText = documents
+          .map((doc) => `[${doc.documentType}] ${doc.ocrText}`)
+          .join('\n\n---\n\n')
+          .slice(0, 10000);
+
+        const prompt = `Com base nos seguintes documentos jurídicos, gere um questionário completo para auxiliar na elaboração de um parecer:
 
 Contexto do caso:
 ${JSON.stringify(caseContext, null, 2)}
@@ -173,38 +217,42 @@ Foque em perguntas que:
 - Identifiquem lacunas de informação
 - Avaliem riscos e oportunidades
 - Sugiram estratégias processuais
-- Verifiquem conformidade procedimental`;
+- Verifiquem conformidade procedimental
 
-      const response = await axios.post(
-        `${this.mistralApiUrl}/chat/completions`,
-        {
-          model: this.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um assistente jurídico especializado em elaboração de questionários para análise de processos.',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          max_tokens: 3000,
-          temperature: 0.4,
-        },
-        {
-          timeout: 120000,
-          headers: this.getHeaders(),
-        }
-      );
+IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`;
 
-      const content = response.data.choices[0].message.content;
-      const questionnaire = this.parseJSONFromMarkdown(content);
-      return questionnaire;
-    } catch (error) {
-      console.error('Error generating questionnaire:', error.response?.data || error.message);
-      return this.getFallbackQuestionnaire();
-    }
+        const response = await axios.post(
+          `${this.mistralApiUrl}/chat/completions`,
+          {
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é um assistente jurídico especializado em elaboração de questionários para análise de processos.',
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 3000,
+            temperature: 0.4,
+          },
+          {
+            timeout: 120000,
+            headers: this.getHeaders(),
+          }
+        );
+
+        const content = response.data.choices[0].message.content;
+        const questionnaire = this.parseJSONFromMarkdown(content);
+        return questionnaire;
+      } catch (error) {
+        console.error('Error generating questionnaire:', error.response?.data || error.message);
+        return this.getFallbackQuestionnaire();
+      }
+    });
   }
 
   /**
@@ -238,7 +286,7 @@ Foque em perguntas que:
   }
 
   /**
-   * Classificar tipo de documento
+   * Classificar tipo de documento (COM RATE LIMITING)
    */
   async classifyDocument(text) {
     try {
@@ -248,18 +296,22 @@ Foque em perguntas que:
 
       const preview = text.slice(0, 2000);
 
-      const response = await axios.post(
-        `${this.mistralApiUrl}/chat/completions`,
-        {
-          model: this.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um especialista em documentos jurídicos. Classifique o tipo de documento. Retorne APENAS JSON válido, sem markdown.',
-            },
-            {
-              role: 'user',
-              content: `Classifique este documento jurídico:
+      // Enfileirar chamada com rate limiting
+      const classification = await this.queueApiCall(async () => {
+        console.log('🏷️  Classifying document...');
+
+        const response = await axios.post(
+          `${this.mistralApiUrl}/chat/completions`,
+          {
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é um especialista em documentos jurídicos. Classifique o tipo de documento. Retorne APENAS JSON válido, sem markdown.',
+              },
+              {
+                role: 'user',
+                content: `Classifique este documento jurídico:
 
 ${preview}
 
@@ -269,20 +321,23 @@ Retorne apenas este JSON (sem markdown, sem explicações):
   "confidence": 0.0-1.0,
   "reasoning": "breve justificativa"
 }`,
-            },
-          ],
-          max_tokens: 200,
-          temperature: 0.1,
-          response_format: { type: 'json_object' },
-        },
-        {
-          timeout: 30000,
-          headers: this.getHeaders(),
-        }
-      );
+              },
+            ],
+            max_tokens: 200,
+            temperature: 0.1,
+            response_format: { type: 'json_object' },
+          },
+          {
+            timeout: 30000,
+            headers: this.getHeaders(),
+          }
+        );
 
-      const content = response.data.choices[0].message.content;
-      return this.parseJSONFromMarkdown(content);
+        const content = response.data.choices[0].message.content;
+        return this.parseJSONFromMarkdown(content);
+      });
+
+      return classification;
     } catch (error) {
       console.error('Error classifying document:', error.response?.data || error.message);
       return { type: 'outro', confidence: 0, reasoning: 'Error in classification' };

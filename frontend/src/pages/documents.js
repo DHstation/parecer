@@ -9,6 +9,10 @@ import { useDropzone } from 'react-dropzone';
 export default function Documents() {
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  // Capturar caseId da URL (quando vindo de /cases/[id])
+  const { caseId: caseIdFromUrl } = router.query;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -115,6 +119,11 @@ export default function Documents() {
     selectedFiles.forEach((file) => {
       formData.append('documents', file);
     });
+
+    // Adicionar caseId se disponível (quando vindo de /cases/[id])
+    if (caseIdFromUrl) {
+      formData.append('caseId', caseIdFromUrl);
+    }
 
     setUploadProgress({ uploading: true });
     uploadMutation.mutate(formData);
@@ -439,7 +448,14 @@ export default function Documents() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Upload de Documentos</h2>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Upload de Documentos</h2>
+                {caseIdFromUrl && (
+                  <p className="text-sm text-green-600 mt-1">
+                    ✓ Documentos serão vinculados ao caso automaticamente
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => setShowUploadModal(false)}
                 className="text-gray-400 hover:text-gray-600"

@@ -235,6 +235,48 @@ class DocumentController {
   }
 
   /**
+   * Atualizar documento
+   */
+  async updateDocument(req, res) {
+    try {
+      const { id } = req.params;
+      const { caseId, tags, documentType } = req.body;
+
+      const document = await Document.findById(id);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      // Se caseId for fornecido, verificar se existe
+      if (caseId !== undefined && caseId !== null) {
+        const Case = require('../models/Case');
+        const caseExists = await Case.findById(caseId);
+        if (!caseExists) {
+          return res.status(404).json({ error: 'Case not found' });
+        }
+      }
+
+      // Atualizar campos permitidos
+      if (caseId !== undefined) {
+        document.caseId = caseId || null;
+      }
+      if (tags !== undefined) {
+        document.tags = Array.isArray(tags) ? tags : [];
+      }
+      if (documentType !== undefined) {
+        document.documentType = documentType;
+      }
+
+      await document.save();
+
+      res.json(document);
+    } catch (error) {
+      console.error('Error updating document:', error);
+      res.status(500).json({ error: 'Failed to update document' });
+    }
+  }
+
+  /**
    * Deletar documento
    */
   async deleteDocument(req, res) {

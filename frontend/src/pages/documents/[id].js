@@ -1,18 +1,40 @@
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { documents } from '../../services/api';
-import { FaArrowLeft, FaDownload, FaRedo, FaTrash, FaRobot, FaFileAlt } from 'react-icons/fa';
+import { documents, cases } from '../../services/api';
+import { FaArrowLeft, FaDownload, FaRedo, FaTrash, FaRobot, FaFileAlt, FaSave } from 'react-icons/fa';
 import toast from 'react-hot-toast';
+import { useState } from 'react';
 
 export default function DocumentDetails() {
   const router = useRouter();
   const { id } = router.query;
   const queryClient = useQueryClient();
 
+  const [selectedCaseId, setSelectedCaseId] = useState('');
+
   const { data: docData, isLoading } = useQuery(
     ['document', id],
     () => documents.get(id),
     { enabled: !!id }
+  );
+
+  // Buscar lista de casos
+  const { data: casesData } = useQuery('cases', () => cases.list());
+
+  const updateMutation = useMutation(
+    (data) => documents.update(id, data),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['document', id]);
+        queryClient.invalidateQueries('documents');
+        queryClient.invalidateQueries('cases');
+        toast.success('Documento atualizado!');
+        setSelectedCaseId('');
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Erro ao atualizar documento');
+      }
+    }
   );
 
   const deleteMutation = useMutation(
@@ -51,6 +73,17 @@ export default function DocumentDetails() {
     window.open(`${process.env.NEXT_PUBLIC_API_URL}/documents/${id}/download`, '_blank');
   };
 
+  const handleUpdateCase = () => {
+    if (!selectedCaseId && selectedCaseId !== '') {
+      toast.error('Selecione um caso');
+      return;
+    }
+
+    updateMutation.mutate({
+      caseId: selectedCaseId || null
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -60,6 +93,7 @@ export default function DocumentDetails() {
   }
 
   const doc = docData?.data;
+  const casesList = casesData?.data?.cases || [];
 
   const statusColors = {
     pending: 'bg-gray-100 text-gray-800',
@@ -299,6 +333,61 @@ export default function DocumentDetails() {
                       </p>
                     </div>
                   )}
+
+                  {/* Caso Vinculado */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <p className="text-gray-600 mb-2">Caso Vinculado</p>
+                    {doc?.caseId ? (
+                      <div className="mb-3">
+                        <p className="font-medium text-gray-900 text-sm mb-1">
+                          {doc.caseId.title || 'Caso sem título'}
+                        </p>
+                        <button
+                          onClick={() => router.push(`/cases/${doc.caseId._id || doc.caseId}`)}
+                          className="text-xs text-blue-600 hover:text-blue-700"
+                        >
+                          Ver caso →
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm mb-3">Nenhum caso vinculado</p>
+                    )}
+
+                    {/* Dropdown para alterar caso */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-600">Alterar vínculo:</label>
+                      <select
+                        value={selectedCaseId}
+                        onChange={(e) => setSelectedCaseId(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Selecione um caso</option>
+                        <option value="null">❌ Remover vínculo</option>
+                        {casesList.map(c => (
+                          <option key={c._id} value={c._id}>
+                            {c.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleUpdateCase}
+                        disabled={!selectedCaseId || updateMutation.isLoading}
+                        className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {updateMutation.isLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <FaSave />
+                            Salvar Vínculo
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

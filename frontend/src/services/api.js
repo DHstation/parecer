@@ -49,6 +49,7 @@ export const documents = {
   list: (params) => api.get('/documents', { params }),
   get: (id) => api.get(`/documents/${id}`),
   download: (id) => api.get(`/documents/${id}/download`),
+  update: (id, data) => api.put(`/documents/${id}`, data),
   reprocess: (id) => api.post(`/documents/${id}/reprocess`),
   delete: (id) => api.delete(`/documents/${id}`),
   search: (query, params) => api.get('/documents/search', { params: { query, ...params } }),
@@ -75,8 +76,8 @@ export const questionnaires = {
   get: (id) => api.get(`/questionnaires/${id}`),
   update: (id, data) => api.put(`/questionnaires/${id}`, data),
   delete: (id) => api.delete(`/questionnaires/${id}`),
-  answerQuestion: (id, questionIndex, answer, notes) =>
-    api.post(`/questionnaires/${id}/questions/${questionIndex}/answer`, { answer, notes }),
+  answerQuestion: (id, questionIndex, data) =>
+    api.post(`/questionnaires/${id}/questions/${questionIndex}/answer`, data),
 };
 
 export default api;

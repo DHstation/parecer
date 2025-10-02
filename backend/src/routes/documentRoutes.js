@@ -53,6 +53,7 @@ router.get('/search', authenticate, searchLimiter, documentController.searchDocu
 router.post('/ask', authenticate, searchLimiter, documentController.askQuestion.bind(documentController));
 router.get('/:id', authenticate, documentController.getDocument.bind(documentController));
 router.get('/:id/download', authenticate, documentController.downloadDocument.bind(documentController));
+router.put('/:id', authenticate, documentController.updateDocument.bind(documentController));
 router.post('/:id/reprocess', authenticate, documentController.reprocessOCR.bind(documentController));
 router.delete('/:id', authenticate, documentController.deleteDocument.bind(documentController));
 
