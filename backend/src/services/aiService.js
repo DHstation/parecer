@@ -71,7 +71,7 @@ class AIService {
               role: 'system',
               content: `Você é um assistente jurídico especializado em análise de documentos.
               Extraia informações estruturadas e relevantes de documentos jurídicos.
-              Retorne sempre em formato JSON válido.`,
+              IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem código de formatação.`,
             },
             {
               role: 'user',
@@ -80,6 +80,7 @@ class AIService {
           ],
           max_tokens: 2048,
           temperature: 0.2,
+          response_format: { type: 'json_object' },
         },
         {
           timeout: 90000,
@@ -87,7 +88,8 @@ class AIService {
         }
       );
 
-      const analysis = JSON.parse(response.data.choices[0].message.content);
+      const content = response.data.choices[0].message.content;
+      const analysis = this.parseJSONFromMarkdown(content);
       return analysis;
     } catch (error) {
       console.error('Error analyzing document:', error.response?.data || error.message);
@@ -189,7 +191,8 @@ Foque em perguntas que:
         }
       );
 
-      const questionnaire = JSON.parse(response.data.choices[0].message.content);
+      const content = response.data.choices[0].message.content;
+      const questionnaire = this.parseJSONFromMarkdown(content);
       return questionnaire;
     } catch (error) {
       console.error('Error generating questionnaire:', error.response?.data || error.message);
@@ -245,7 +248,7 @@ Foque em perguntas que:
           messages: [
             {
               role: 'system',
-              content: 'Você é um especialista em documentos jurídicos. Classifique o tipo de documento.',
+              content: 'Você é um especialista em documentos jurídicos. Classifique o tipo de documento. Retorne APENAS JSON válido, sem markdown.',
             },
             {
               role: 'user',
@@ -253,7 +256,7 @@ Foque em perguntas que:
 
 ${preview}
 
-Retorne JSON:
+Retorne apenas este JSON (sem markdown, sem explicações):
 {
   "type": "peticao_inicial|contestacao|sentenca|acordao|despacho|parecer|contrato|procuracao|documento_pessoal|outro",
   "confidence": 0.0-1.0,
@@ -263,6 +266,7 @@ Retorne JSON:
           ],
           max_tokens: 200,
           temperature: 0.1,
+          response_format: { type: 'json_object' },
         },
         {
           timeout: 30000,
@@ -270,10 +274,32 @@ Retorne JSON:
         }
       );
 
-      return JSON.parse(response.data.choices[0].message.content);
+      const content = response.data.choices[0].message.content;
+      return this.parseJSONFromMarkdown(content);
     } catch (error) {
       console.error('Error classifying document:', error.response?.data || error.message);
       return { type: 'outro', confidence: 0, reasoning: 'Error in classification' };
+    }
+  }
+
+  /**
+   * Parse JSON from markdown code blocks
+   */
+  parseJSONFromMarkdown(content) {
+    try {
+      // Remove markdown code blocks (```json ... ``` ou ``` ... ```)
+      const jsonMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1].trim());
+      }
+
+      // Se não tiver markdown, tenta parsear direto
+      return JSON.parse(content.trim());
+    } catch (error) {
+      console.error('Error parsing JSON from markdown:', error.message);
+      console.error('Content received:', content.substring(0, 200));
+      throw error;
     }
   }
 
