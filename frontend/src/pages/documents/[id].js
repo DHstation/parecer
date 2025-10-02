@@ -267,9 +267,12 @@ export default function DocumentDetails() {
                         <div className="space-y-2">
                           {doc.extractedData.valores.map((valor, index) => (
                             <div key={index} className="flex justify-between p-3 bg-gray-50 rounded">
-                              <span className="text-gray-700 capitalize">{valor.tipo}</span>
+                              <span className="text-gray-700 capitalize">{valor.tipo?.replace(/_/g, ' ')}</span>
                               <span className="font-medium text-gray-900">
-                                {valor.moeda} {valor.valor.toLocaleString('pt-BR')}
+                                {new Intl.NumberFormat('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL'
+                                }).format(valor.valor)}
                               </span>
                             </div>
                           ))}

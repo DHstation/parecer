@@ -70,19 +70,170 @@ class AIService {
    * Análise fallback quando API não está disponível
    */
   getFallbackAnalysis(text) {
+    const textLower = text.toLowerCase();
+    const first3000 = text.slice(0, 3000);
+
+    // Extrair informações básicas por regex
+    const keyPoints = [];
+    const partes = [];
+    const advogados = [];
+    const datas = [];
+    const valores = [];
+    const fundamentosLegais = [];
+    const pedidos = [];
+
+    // Número do processo (padrão: 0000000-00.0000.0.00.0000)
+    const processoMatch = text.match(/(\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4})/);
+    const numeroProcesso = processoMatch ? processoMatch[1] : null;
+
+    // Partes (padrão comum em documentos jurídicos)
+    const autorMatch = text.match(/autor[:\s]+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ][a-záàâãéèêíïóôõöúçñ\s]+)/i);
+    if (autorMatch) {
+      partes.push({ tipo: 'autor', nome: autorMatch[1].trim().slice(0, 100), cpfCnpj: null });
+      keyPoints.push(`Autor: ${autorMatch[1].trim().slice(0, 100)}`);
+    }
+
+    const reuMatch = text.match(/r[ée]u[:\s]+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ][a-záàâãéèêíïóôõöúçñ\s]+)/i);
+    if (reuMatch) {
+      partes.push({ tipo: 'réu', nome: reuMatch[1].trim().slice(0, 100), cpfCnpj: null });
+      keyPoints.push(`Réu: ${reuMatch[1].trim().slice(0, 100)}`);
+    }
+
+    // Advogados (padrão: OAB/XX 00000)
+    const oabMatches = text.matchAll(/OAB[\/\s]([A-Z]{2})\s*(\d+)/gi);
+    for (const match of oabMatches) {
+      const oab = `${match[1]}/${match[2]}`;
+      if (!advogados.find(adv => adv.oab === oab)) {
+        advogados.push({ nome: null, oab });
+      }
+    }
+
+    // Datas (padrão: DD/MM/YYYY)
+    const dataMatches = text.matchAll(/(\d{2}\/\d{2}\/\d{4})/g);
+    const datasEncontradas = new Set();
+    for (const match of dataMatches) {
+      const dataStr = match[1];
+      if (!datasEncontradas.has(dataStr)) {
+        datasEncontradas.add(dataStr);
+        const [dia, mes, ano] = dataStr.split('/');
+        datas.push({
+          tipo: 'data_mencionada',
+          data: `${ano}-${mes}-${dia}`,
+          descricao: 'Data encontrada no documento'
+        });
+      }
+      if (datasEncontradas.size >= 5) break; // Limitar a 5 datas
+    }
+
+    // Valores (padrão: R$ 0.000,00)
+    // Só extrair valores se NÃO for documento pessoal (certidão, RG, CPF)
+    const isDocumentoPessoal = textLower.includes('certidão') ||
+                                textLower.includes('certidao') ||
+                                /\b(rg|cpf)\b/i.test(textLower) ||
+                                textLower.includes('nascimento') ||
+                                textLower.includes('casamento') ||
+                                textLower.includes('óbito');
+
+    if (!isDocumentoPessoal) {
+      const valorMatches = text.matchAll(/R\$\s*([\d\.]+,\d{2})/g);
+      const valoresEncontrados = new Set();
+      for (const match of valorMatches) {
+        const valorStr = match[1];
+        if (!valoresEncontrados.has(valorStr)) {
+          valoresEncontrados.add(valorStr);
+          const valorNumerico = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+
+          // Filtrar valores muito pequenos (provavelmente taxas irrelevantes) e muito grandes (erros)
+          if (valorNumerico >= 100 && valorNumerico <= 999999999) {
+            valores.push({
+              tipo: 'valor_mencionado',
+              valor: valorNumerico
+            });
+          }
+        }
+        if (valoresEncontrados.size >= 5) break; // Limitar a 5 valores
+      }
+    }
+
+    // Fundamentos legais (padrão: Lei nº 0000, Art. 000, CF/88)
+    // Só extrair se NÃO for documento pessoal
+    if (!isDocumentoPessoal) {
+      const leiMatches = text.matchAll(/Lei\s+n[ºo°]?\s*([\d\.\/]+)/gi);
+      for (const match of leiMatches) {
+        const lei = `Lei nº ${match[1]}`;
+        if (!fundamentosLegais.includes(lei)) {
+          fundamentosLegais.push(lei);
+        }
+        if (fundamentosLegais.length >= 5) break;
+      }
+
+      const artigoMatches = text.matchAll(/art(?:igo)?\.?\s*(\d+)/gi);
+      const artigosAdicionados = new Set();
+      for (const match of artigoMatches) {
+        const artigo = `Artigo ${match[1]}`;
+        if (!artigosAdicionados.has(artigo) && !fundamentosLegais.includes(artigo)) {
+          fundamentosLegais.push(artigo);
+          artigosAdicionados.add(artigo);
+        }
+        if (fundamentosLegais.length >= 10) break;
+      }
+    }
+
+    // Identificar tipo de assunto
+    let assunto = 'Não identificado';
+
+    // Documentos pessoais têm assuntos específicos
+    if (isDocumentoPessoal) {
+      if (textLower.includes('nascimento')) assunto = 'Certidão de Nascimento';
+      else if (textLower.includes('casamento')) assunto = 'Certidão de Casamento';
+      else if (textLower.includes('óbito') || textLower.includes('obito')) assunto = 'Certidão de Óbito';
+      else if (textLower.includes('identidade') || /\brg\b/i.test(textLower)) assunto = 'Documento de Identidade';
+      else if (/\bcpf\b/i.test(textLower)) assunto = 'CPF';
+      else assunto = 'Documento Pessoal';
+    } else {
+      // Documentos jurídicos
+      if (textLower.includes('trabalh')) assunto = 'Direito do Trabalho';
+      else if (textLower.includes('consumidor')) assunto = 'Direito do Consumidor';
+      else if (textLower.includes('civil')) assunto = 'Direito Civil';
+      else if (textLower.includes('criminal') || textLower.includes('penal')) assunto = 'Direito Penal';
+      else if (textLower.includes('tributár') || textLower.includes('fiscal')) assunto = 'Direito Tributário';
+      else if (textLower.includes('família') || textLower.includes('divórcio')) assunto = 'Direito de Família';
+      else if (textLower.includes('empresarial') || textLower.includes('societário')) assunto = 'Direito Empresarial';
+      else if (textLower.includes('imobiliário') || textLower.includes('locação')) assunto = 'Direito Imobiliário';
+    }
+
+    // Gerar resumo básico
+    let summary = first3000.trim();
+    if (summary.length > 500) {
+      summary = summary.substring(0, 497) + '...';
+    }
+
+    // Adicionar informações importantes aos keyPoints SOMENTE se houver dados
+    if (numeroProcesso) keyPoints.unshift(`Processo: ${numeroProcesso}`);
+    if (partes.length > 0) keyPoints.push(`${partes.length} parte(s) identificada(s)`);
+    if (advogados.length > 0) keyPoints.push(`${advogados.length} advogado(s) identificado(s)`);
+    if (valores.length > 0) keyPoints.push(`${valores.length} valor(es) monetário(s) identificado(s)`);
+    if (fundamentosLegais.length > 0) keyPoints.push(`${fundamentosLegais.length} fundamento(s) legal(is) citado(s)`);
+
+    // Se não conseguiu extrair NENHUMA informação relevante, deixar vazio
+    if (keyPoints.length === 0 && partes.length === 0 && advogados.length === 0 &&
+        valores.length === 0 && fundamentosLegais.length === 0 && !numeroProcesso) {
+      keyPoints.push('Nenhuma informação estruturada extraída automaticamente');
+    }
+
     return {
       documentType: 'outro',
       confidence: 0.3,
-      summary: text.substring(0, 500) + '...',
-      keyPoints: ['Análise automática indisponível'],
-      partes: [],
-      advogados: [],
-      numeroProcesso: null,
-      datas: [],
-      valores: [],
-      assunto: 'Não identificado',
+      summary,
+      keyPoints: keyPoints.length > 0 ? keyPoints : [],
+      partes: partes.length > 0 ? partes : [],
+      advogados: advogados.length > 0 ? advogados : [],
+      numeroProcesso: numeroProcesso || null,
+      datas: datas.length > 0 ? datas.slice(0, 10) : [],
+      valores: valores.length > 0 ? valores.slice(0, 10) : [],
+      assunto: assunto !== 'Não identificado' ? assunto : null,
       pedidos: [],
-      fundamentosLegais: [],
+      fundamentosLegais: fundamentosLegais.length > 0 ? [...new Set(fundamentosLegais)].slice(0, 10) : [],
     };
   }
 
