@@ -707,15 +707,85 @@ Retorne APENAS este JSON (sem markdown, sem explicações):
   }
 
   /**
+   * Gerar resumo fallback sem API
+   */
+  generateFallbackCaseSummary(documents, caseInfo) {
+    const docTypes = [...new Set(documents.map(d => d.documentType))].filter(Boolean);
+    const numDocs = documents.length;
+
+    // Tentar extrair partes dos documentos
+    const partes = [];
+    documents.forEach(doc => {
+      if (doc.extractedData?.partes) {
+        doc.extractedData.partes.forEach(parte => {
+          if (parte.nome && !partes.find(p => p.nome === parte.nome)) {
+            partes.push(parte);
+          }
+        });
+      }
+    });
+
+    // Construir resumo básico
+    let summary = `Caso ${caseInfo.title || 'sem título'}`;
+
+    if (caseInfo.areaJuridica) {
+      const areas = {
+        civil: 'Cível',
+        trabalhista: 'Trabalhista',
+        penal: 'Penal',
+        tributario: 'Tributário',
+        familia: 'Família',
+        consumidor: 'Consumidor'
+      };
+      summary += ` na área de ${areas[caseInfo.areaJuridica] || caseInfo.areaJuridica}`;
+    }
+
+    if (partes.length > 0) {
+      const autores = partes.filter(p => p.tipo?.toLowerCase().includes('autor')).map(p => p.nome);
+      const reus = partes.filter(p => p.tipo?.toLowerCase().includes('r') && p.tipo?.toLowerCase().includes('u')).map(p => p.nome);
+
+      if (autores.length > 0 && reus.length > 0) {
+        summary += `, envolvendo ${autores[0]} e ${reus[0]}`;
+      } else if (partes.length > 0) {
+        summary += `, envolvendo ${partes[0].nome}`;
+      }
+    }
+
+    summary += `. Composto por ${numDocs} documento(s)`;
+
+    if (docTypes.length > 0) {
+      const typeLabels = {
+        peticao_inicial: 'petição inicial',
+        contestacao: 'contestação',
+        sentenca: 'sentença',
+        acordao: 'acórdão',
+        despacho: 'despacho',
+        parecer: 'parecer',
+        contrato: 'contrato',
+        procuracao: 'procuração',
+        documento_pessoal: 'documento pessoal'
+      };
+      const typesStr = docTypes.slice(0, 3).map(t => typeLabels[t] || t).join(', ');
+      summary += ` incluindo ${typesStr}`;
+    }
+
+    summary += '.';
+
+    return summary;
+  }
+
+  /**
    * Gerar resumo executivo de um caso
    */
   async generateCaseSummary(documents, caseInfo) {
-    return this.queueApiCall(async () => {
-      try {
-        if (!this.mistralApiKey) {
-          return 'Resumo automático indisponível. Configure MISTRAL_API_KEY para habilitar esta funcionalidade.';
-        }
+    try {
+      if (!this.mistralApiKey) {
+        console.log('⚠️ No API key, using fallback summary');
+        return this.generateFallbackCaseSummary(documents, caseInfo);
+      }
 
+      // Tentar com a API
+      return await this.queueApiCall(async () => {
         console.log('📝 Generating case summary...');
 
         const documentsText = documents
@@ -762,11 +832,12 @@ Retorne APENAS o resumo, sem introduções ou seções.`;
         );
 
         return response.data.choices[0].message.content;
-      } catch (error) {
-        console.error('Error generating case summary:', error.response?.data || error.message);
-        return 'Erro ao gerar resumo. Verifique a configuração da API Mistral.';
-      }
-    });
+      });
+    } catch (error) {
+      console.error('❌ Error generating case summary with API:', error.response?.data?.message || error.message);
+      console.log('⚠️ Falling back to basic summary generation');
+      return this.generateFallbackCaseSummary(documents, caseInfo);
+    }
   }
 }
 
