@@ -43,19 +43,60 @@ class RAGService {
   }
 
   /**
+   * Gerar embeddings semânticos usando Mistral Embeddings API
+   */
+  async generateMistralEmbedding(text) {
+    try {
+      if (!this.mistralApiKey) {
+        throw new Error('Mistral API key not available');
+      }
+
+      const response = await axios.post(
+        'https://api.mistral.ai/v1/embeddings',
+        {
+          model: 'mistral-embed',
+          input: [text],
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.mistralApiKey}`,
+          },
+          timeout: 30000,
+        }
+      );
+
+      // Retornar vetor denso de 1024 dimensões
+      return response.data.data[0].embedding;
+    } catch (error) {
+      console.error('Error generating Mistral embedding:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Gerar embeddings para texto
-   * Usa método simples de TF-IDF por padrão
+   * Usa embeddings semânticos da Mistral se disponível, senão TF-IDF
    */
   async generateEmbedding(text) {
     try {
-      // Usar embeddings simples (mais rápido, funciona sem dependências pesadas)
+      // Se forçar embeddings simples via env var
       if (this.useSimpleEmbeddings) {
         return this.generateSimpleEmbedding(text);
       }
 
-      // Se tiver API de embeddings externa, usar aqui
-      // Por exemplo: OpenAI, Cohere, etc.
-      console.warn('External embeddings API not configured, falling back to simple embeddings');
+      // Tentar usar Mistral Embeddings (semânticos, alta qualidade)
+      if (this.mistralApiKey) {
+        try {
+          return await this.generateMistralEmbedding(text);
+        } catch (error) {
+          console.warn('Mistral embeddings failed, falling back to TF-IDF:', error.message);
+          return this.generateSimpleEmbedding(text);
+        }
+      }
+
+      // Fallback para TF-IDF
+      console.warn('No embeddings API configured, using TF-IDF');
       return this.generateSimpleEmbedding(text);
     } catch (error) {
       console.error('Error generating embedding:', error);

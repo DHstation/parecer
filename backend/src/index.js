@@ -72,10 +72,39 @@ const startServer = async () => {
     }
 
     // Iniciar servidor
-    app.listen(PORT, () => {
+    app.listen(PORT, async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 API: http://localhost:${PORT}`);
+
+      // Reindexar documentos automaticamente na inicialização
+      if (process.env.AUTO_REINDEX_ON_STARTUP !== 'false') {
+        try {
+          const Document = require('./models/Document');
+          const { ragQueue } = require('./config/redis');
+
+          console.log('🔄 Auto-reindexing documents for RAG...');
+
+          const documents = await Document.find({
+            isActive: true,
+            ocrStatus: 'completed',
+          });
+
+          let queued = 0;
+          for (const doc of documents) {
+            if (doc.ocrText) {
+              await ragQueue.add('index-document', {
+                documentId: doc._id.toString(),
+              });
+              queued++;
+            }
+          }
+
+          console.log(`✓ ${queued} documents queued for automatic reindexing`);
+        } catch (error) {
+          console.error('Error during auto-reindexing:', error.message);
+        }
+      }
     });
   } catch (error) {
     console.error('Failed to start server:', error);
