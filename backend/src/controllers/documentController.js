@@ -337,6 +337,36 @@ class DocumentController {
       res.status(500).json({ error: 'Failed to get document stats' });
     }
   }
+
+  /**
+   * Reindexar todos os documentos no RAG
+   */
+  async reindexAll(req, res) {
+    try {
+      const documents = await Document.find({
+        isActive: true,
+        ocrStatus: 'completed',
+      });
+
+      let indexed = 0;
+      for (const doc of documents) {
+        if (doc.ocrText) {
+          await ragQueue.add('index-document', {
+            documentId: doc._id.toString(),
+          });
+          indexed++;
+        }
+      }
+
+      res.json({
+        message: `${indexed} documents queued for reindexing`,
+        total: documents.length,
+      });
+    } catch (error) {
+      console.error('Error reindexing documents:', error);
+      res.status(500).json({ error: 'Failed to reindex documents' });
+    }
+  }
 }
 
 module.exports = new DocumentController();

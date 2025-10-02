@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FaSearch, FaRobot } from 'react-icons/fa';
+import { FaSearch, FaRobot, FaSync } from 'react-icons/fa';
 import { documents } from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -7,6 +7,7 @@ export default function Search() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isReindexing, setIsReindexing] = useState(false);
 
   const handleAsk = async (e) => {
     e.preventDefault();
@@ -27,13 +28,39 @@ export default function Search() {
     }
   };
 
+  const handleReindex = async () => {
+    if (!confirm('Reindexar todos os documentos? Isso pode levar alguns minutos.')) {
+      return;
+    }
+
+    setIsReindexing(true);
+    try {
+      const response = await documents.reindexAll();
+      toast.success(response.data.message || 'Documentos enfileirados para reindexação!');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao reindexar documentos');
+    } finally {
+      setIsReindexing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="px-8 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">Busca Semântica</h1>
-          <p className="text-gray-600 mt-1">Faça perguntas sobre seus documentos usando IA</p>
+        <div className="px-8 py-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Busca Semântica</h1>
+            <p className="text-gray-600 mt-1">Faça perguntas sobre seus documentos usando IA</p>
+          </div>
+          <button
+            onClick={handleReindex}
+            disabled={isReindexing}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+          >
+            <FaSync className={isReindexing ? 'animate-spin' : ''} />
+            {isReindexing ? 'Reindexando...' : 'Reindexar Documentos'}
+          </button>
         </div>
       </header>
 

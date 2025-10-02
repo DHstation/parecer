@@ -48,6 +48,7 @@ export const documents = {
   }),
   list: (params) => api.get('/documents', { params }),
   stats: () => api.get('/documents/stats'),
+  reindexAll: () => api.post('/documents/reindex-all'),
   get: (id) => api.get(`/documents/${id}`),
   download: (id) => api.get(`/documents/${id}/download`),
   update: (id, data) => api.put(`/documents/${id}`, data),

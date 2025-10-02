@@ -48,6 +48,7 @@ const upload = multer({
 
 // Rotas
 router.post('/upload', authenticate, uploadLimiter, upload.array('documents', 20), documentController.uploadDocuments.bind(documentController));
+router.post('/reindex-all', authenticate, documentController.reindexAll.bind(documentController));
 router.get('/stats', authenticate, documentController.getStats.bind(documentController));
 router.get('/', authenticate, documentController.listDocuments.bind(documentController));
 router.get('/search', authenticate, searchLimiter, documentController.searchDocuments.bind(documentController));
