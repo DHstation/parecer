@@ -460,17 +460,6 @@ export default function CaseDetails() {
                   </div>
                 </div>
 
-                {/* Summary */}
-                {caseItem?.consolidatedSummary && (
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <FaRobot className="text-purple-600" />
-                      Resumo Gerado por IA
-                    </h2>
-                    <p className="text-gray-700 whitespace-pre-wrap">{caseItem.consolidatedSummary}</p>
-                  </div>
-                )}
-
                 {/* Documents */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -557,6 +546,44 @@ export default function CaseDetails() {
                     )}
                   </div>
                 </div>
+
+                {/* AI Summary */}
+                {caseItem?.consolidatedSummary && (
+                  <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg shadow p-4 border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FaRobot className="text-purple-600" />
+                      <h2 className="text-sm font-semibold text-gray-900">Resumo IA</h2>
+                    </div>
+                    <div className="text-xs text-gray-700 line-clamp-6 leading-relaxed">
+                      {caseItem.consolidatedSummary}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const modal = document.createElement('div');
+                        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+                        modal.innerHTML = `
+                          <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-y-auto p-6">
+                            <div class="flex items-center justify-between mb-4">
+                              <div class="flex items-center gap-2">
+                                <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+                                <h3 class="text-lg font-semibold text-gray-900">Resumo Completo - IA</h3>
+                              </div>
+                              <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                              </button>
+                            </div>
+                            <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">${caseItem.consolidatedSummary}</div>
+                          </div>
+                        `;
+                        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+                        document.body.appendChild(modal);
+                      }}
+                      className="text-xs text-purple-600 hover:text-purple-700 mt-2 font-medium"
+                    >
+                      Ver resumo completo →
+                    </button>
+                  </div>
+                )}
 
                 {/* Critical Points */}
                 {caseItem?.criticalPoints && caseItem.criticalPoints.length > 0 && (

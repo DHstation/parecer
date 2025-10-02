@@ -127,20 +127,24 @@ class CaseController {
     try {
       const { id } = req.params;
 
-      const caseData = await Case.findById(id).populate('documents');
+      const caseData = await Case.findById(id);
 
       if (!caseData) {
         return res.status(404).json({ error: 'Case not found' });
       }
 
-      // Filtrar apenas documentos processados
-      const processedDocs = caseData.documents.filter(
-        d => d.ocrStatus === 'completed' && d.ocrText
-      );
+      // Buscar documentos vinculados ao caso (via caseId nos documentos)
+      const processedDocs = await Document.find({
+        caseId: id,
+        ocrStatus: 'completed',
+        isActive: true,
+      });
 
       if (processedDocs.length === 0) {
-        return res.status(400).json({ error: 'No processed documents available' });
+        return res.status(400).json({ error: 'No processed documents available for this case' });
       }
+
+      console.log(`Generating summary for case ${id} with ${processedDocs.length} documents`);
 
       // Gerar resumo usando IA
       const summary = await aiService.generateCaseSummary(

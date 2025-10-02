@@ -12,7 +12,6 @@ const caseSchema = new mongoose.Schema(
     },
     numeroProcesso: {
       type: String,
-      sparse: true,
     },
 
     // Classificação
@@ -102,7 +101,16 @@ const caseSchema = new mongoose.Schema(
 );
 
 // Índices
-caseSchema.index({ numeroProcesso: 1 }, { unique: true, sparse: true });
+// Índice único composto: numeroProcesso + isActive
+// Permite mesmo numeroProcesso se um estiver inativo (soft delete)
+caseSchema.index(
+  { numeroProcesso: 1, isActive: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { isActive: true, numeroProcesso: { $exists: true, $ne: null } }
+  }
+);
 caseSchema.index({ areaJuridica: 1 });
 caseSchema.index({ status: 1 });
 caseSchema.index({ createdBy: 1 });

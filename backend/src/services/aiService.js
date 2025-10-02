@@ -369,16 +369,19 @@ Retorne apenas este JSON (sem markdown, sem explicações):
    * Gerar resumo executivo de um caso
    */
   async generateCaseSummary(documents, caseInfo) {
-    try {
-      if (!this.mistralApiKey) {
-        return 'Resumo automático indisponível. Configure MISTRAL_API_KEY para habilitar esta funcionalidade.';
-      }
+    return this.queueApiCall(async () => {
+      try {
+        if (!this.mistralApiKey) {
+          return 'Resumo automático indisponível. Configure MISTRAL_API_KEY para habilitar esta funcionalidade.';
+        }
 
-      const documentsText = documents
-        .map((doc) => `[${doc.documentType}]\n${doc.summary || doc.ocrText?.slice(0, 1000)}`)
-        .join('\n\n---\n\n');
+        console.log('📝 Generating case summary...');
 
-      const prompt = `Gere um resumo executivo completo do seguinte caso jurídico:
+        const documentsText = documents
+          .map((doc) => `[${doc.documentType}]\n${doc.summary || doc.ocrText?.slice(0, 1000)}`)
+          .join('\n\n---\n\n');
+
+        const prompt = `Gere um resumo executivo completo do seguinte caso jurídico:
 
 Informações do Caso:
 ${JSON.stringify(caseInfo, null, 2)}
@@ -397,34 +400,35 @@ Gere um resumo executivo que inclua:
 
 Retorne em formato de texto estruturado e profissional.`;
 
-      const response = await axios.post(
-        `${this.mistralApiUrl}/chat/completions`,
-        {
-          model: this.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um advogado sênior gerando resumos executivos de casos.',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          max_tokens: 2048,
-          temperature: 0.3,
-        },
-        {
-          timeout: 90000,
-          headers: this.getHeaders(),
-        }
-      );
+        const response = await axios.post(
+          `${this.mistralApiUrl}/chat/completions`,
+          {
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é um advogado sênior gerando resumos executivos de casos.',
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            max_tokens: 2048,
+            temperature: 0.3,
+          },
+          {
+            timeout: 90000,
+            headers: this.getHeaders(),
+          }
+        );
 
-      return response.data.choices[0].message.content;
-    } catch (error) {
-      console.error('Error generating case summary:', error.response?.data || error.message);
-      return 'Erro ao gerar resumo. Verifique a configuração da API Mistral.';
-    }
+        return response.data.choices[0].message.content;
+      } catch (error) {
+        console.error('Error generating case summary:', error.response?.data || error.message);
+        return 'Erro ao gerar resumo. Verifique a configuração da API Mistral.';
+      }
+    });
   }
 }
 
