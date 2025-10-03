@@ -1,4 +1,5 @@
 import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
 import {
   FaHome,
   FaFolder,
@@ -7,11 +8,36 @@ import {
   FaChartBar,
   FaSearch,
   FaSignOutAlt,
-  FaUser
+  FaUser,
+  FaUsers
 } from 'react-icons/fa';
 
 export default function Sidebar() {
   const router = useRouter();
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    // Obter role do usuário do localStorage
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        // Buscar perfil para obter role
+        fetch('http://localhost:3001/api/auth/profile', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setUserRole(data.role);
+          })
+          .catch(() => {});
+      } catch (error) {
+        console.error('Error parsing token:', error);
+      }
+    }
+  }, []);
 
   const menuItems = [
     {
@@ -50,6 +76,13 @@ export default function Sidebar() {
       path: '/reports',
       description: 'Estatísticas e análises'
     },
+    // Apenas admins veem esta opção
+    ...(userRole === 'admin' ? [{
+      name: 'Administradores',
+      icon: FaUsers,
+      path: '/users',
+      description: 'Gerenciar administradores'
+    }] : []),
   ];
 
   const isActive = (path) => {
