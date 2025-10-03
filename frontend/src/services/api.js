@@ -25,9 +25,19 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Apenas redireciona para login se for erro de autenticação (token inválido/expirado)
+    // Não redireciona se for erro de senha incorreta
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      const errorMessage = error.response?.data?.error;
+
+      // Lista de erros que NÃO devem redirecionar para login
+      const passwordErrors = ['Senha atual incorreta', 'Invalid credentials'];
+
+      // Se não for erro de senha, então é erro de autenticação (token inválido)
+      if (!passwordErrors.includes(errorMessage)) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -39,6 +49,7 @@ export const auth = {
   register: (data) => api.post('/auth/register', data),
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (data) => api.put('/auth/profile', data),
+  changePassword: (currentPassword, newPassword) => api.put('/auth/change-password', { currentPassword, newPassword }),
   // Admin - Gerenciamento de usuários
   listUsers: () => api.get('/auth/users'),
   createUser: (data) => api.post('/auth/users', data),

@@ -11,6 +11,7 @@ router.post('/login', authController.login.bind(authController));
 // Rotas do próprio usuário
 router.get('/profile', authenticate, authController.getProfile.bind(authController));
 router.put('/profile', authenticate, authController.updateProfile.bind(authController));
+router.put('/change-password', authenticate, authController.changePassword.bind(authController));
 
 // Rotas de gerenciamento de usuários (apenas admin)
 router.get('/users', authenticate, authorize('admin'), authController.listUsers.bind(authController));

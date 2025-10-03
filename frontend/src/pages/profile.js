@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { auth } from '../services/api';
-import { FaUser, FaSave } from 'react-icons/fa';
+import { FaUser, FaSave, FaLock } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 export default function Profile() {
@@ -13,6 +13,12 @@ export default function Profile() {
     email: '',
     oab: '',
     department: ''
+  });
+
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
   });
 
   const { data: profileData, isLoading } = useQuery('profile', () => auth.getProfile());
@@ -41,12 +47,54 @@ export default function Profile() {
     }
   );
 
+  const changePasswordMutation = useMutation(
+    ({ currentPassword, newPassword }) => auth.changePassword(currentPassword, newPassword),
+    {
+      onSuccess: () => {
+        toast.success('Senha alterada com sucesso!');
+        setPasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        });
+      },
+      onError: (error) => {
+        toast.error(error.response?.data?.error || 'Erro ao alterar senha');
+      }
+    }
+  );
+
   const handleSubmit = (e) => {
     e.preventDefault();
     updateMutation.mutate({
       name: formData.name,
       oab: formData.oab,
       department: formData.department
+    });
+  };
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+
+    // Validações
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      toast.error('Preencha todos os campos de senha');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast.error('A nova senha deve ter no mínimo 6 caracteres');
+      return;
+    }
+
+    changePasswordMutation.mutate({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword
     });
   };
 
@@ -152,6 +200,69 @@ export default function Profile() {
                 </div>
               </div>
             </form>
+
+            {/* Change Password Section */}
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FaLock />
+                Alterar Senha
+              </h3>
+              <form onSubmit={handlePasswordSubmit}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Senha Atual
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordData.currentPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nova Senha
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="••••••••"
+                      minLength={6}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Mínimo de 6 caracteres</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Confirmar Nova Senha
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={changePasswordMutation.isLoading}
+                      className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <FaLock />
+                      {changePasswordMutation.isLoading ? 'Alterando...' : 'Alterar Senha'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
 
             {/* Additional Info */}
             <div className="mt-8 pt-8 border-t border-gray-200">

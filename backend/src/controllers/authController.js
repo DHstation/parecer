@@ -120,13 +120,56 @@ class AuthController {
       );
 
       if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+        return res.status(404).json({ error: 'Usuário não encontrado' });
       }
 
       res.json(user);
     } catch (error) {
       console.error('Error updating profile:', error);
-      res.status(500).json({ error: 'Failed to update profile' });
+      res.status(500).json({ error: 'Falha ao atualizar perfil' });
+    }
+  }
+
+  /**
+   * Alterar senha do próprio usuário
+   */
+  async changePassword(req, res) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      // Validações
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'A nova senha deve ter no mínimo 6 caracteres' });
+      }
+
+      // Buscar usuário com senha
+      const user = await User.findById(req.user.id).select('+password');
+
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+
+      // Verificar senha atual
+      const isPasswordValid = await user.comparePassword(currentPassword);
+
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: 'Senha atual incorreta' });
+      }
+
+      // Atualizar senha
+      user.password = newPassword;
+      await user.save();
+
+      res.json({
+        message: 'Senha alterada com sucesso',
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      res.status(500).json({ error: 'Falha ao alterar senha' });
     }
   }
 
