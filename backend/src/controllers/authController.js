@@ -153,10 +153,36 @@ class AuthController {
     try {
       const { name, email, password, role, oab, department } = req.body;
 
-      // Verificar se usuário já existe
-      const existingUser = await User.findOne({ email });
+      // Verificar se usuário ativo já existe
+      const existingUser = await User.findOne({ email, isActive: true });
       if (existingUser) {
         return res.status(400).json({ error: 'Email já cadastrado' });
+      }
+
+      // Verificar se existe usuário inativo com este email
+      const inactiveUser = await User.findOne({ email, isActive: false });
+      if (inactiveUser) {
+        // Reativar usuário existente e atualizar dados
+        inactiveUser.name = name;
+        inactiveUser.password = password;
+        inactiveUser.role = role || 'analyst';
+        inactiveUser.oab = oab;
+        inactiveUser.department = department;
+        inactiveUser.isActive = true;
+        await inactiveUser.save();
+
+        return res.status(201).json({
+          message: 'Usuário reativado com sucesso',
+          user: {
+            id: inactiveUser._id,
+            name: inactiveUser.name,
+            email: inactiveUser.email,
+            role: inactiveUser.role,
+            oab: inactiveUser.oab,
+            department: inactiveUser.department,
+            createdAt: inactiveUser.createdAt,
+          },
+        });
       }
 
       // Validar role
@@ -165,7 +191,7 @@ class AuthController {
         return res.status(400).json({ error: 'Função inválida' });
       }
 
-      // Criar usuário
+      // Criar novo usuário
       const user = await User.create({
         name,
         email,
