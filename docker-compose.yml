@@ -5,30 +5,36 @@ services:
   mongodb:
     image: mongo:7.0
     container_name: parecer_mongodb
-    restart: always
+    restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"  # Bind apenas localhost para segurança
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: parecer_admin_2024
-      MONGO_INITDB_DATABASE: parecer_db
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-parecer_admin_2024}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-parecer_db}
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
     networks:
       - parecer_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   # MinIO - Armazenamento de arquivos
   minio:
     image: minio/minio:latest
     container_name: parecer_minio
-    restart: always
+    restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"  # API apenas localhost
+      - "127.0.0.1:9001:9001"  # Console apenas localhost
     environment:
-      MINIO_ROOT_USER: minio_admin
-      MINIO_ROOT_PASSWORD: minio_admin_2024
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_admin_2024}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -39,14 +45,35 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+      start_period: 30s
+
+  # Redis para cache e filas
+  redis:
+    image: redis:7-alpine
+    container_name: parecer_redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"  # Apenas localhost
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    networks:
+      - parecer_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   # Mistral OCR API (usando vLLM para servir o modelo)
+  # OPCIONAL: Comente este serviço se não tiver GPU ou não quiser usar Mistral local
   mistral_ocr:
     image: vllm/vllm-openai:latest
     container_name: parecer_mistral
-    restart: always
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # Apenas localhost
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_TOKEN}
     command: >
@@ -65,6 +92,14 @@ services:
               capabilities: [gpu]
     networks:
       - parecer_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    profiles:
+      - with-gpu  # Inicie apenas com: docker-compose --profile with-gpu up
 
   # Backend API
   backend:
@@ -72,29 +107,44 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: parecer_backend
-    restart: always
+    restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"  # Apenas localhost (use nginx/proxy reverso para expor)
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=3001
-      - MONGODB_URI=mongodb://admin:parecer_admin_2024@mongodb:27017/parecer_db?authSource=admin
+      - MONGODB_URI=mongodb://${MONGODB_USER:-admin}:${MONGODB_PASSWORD:-parecer_admin_2024}@mongodb:27017/${MONGODB_DATABASE:-parecer_db}?authSource=admin
       - MINIO_ENDPOINT=minio
       - MINIO_PORT=9000
-      - MINIO_ACCESS_KEY=minio_admin
-      - MINIO_SECRET_KEY=minio_admin_2024
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minio_admin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minio_admin_2024}
       - MINIO_USE_SSL=false
-      - MISTRAL_API_URL=http://mistral_ocr:8000/v1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - MISTRAL_API_URL=${MISTRAL_API_URL:-http://mistral_ocr:8000/v1}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
       - JWT_SECRET=${JWT_SECRET:-parecer_jwt_secret_change_in_production}
+      - ENABLE_WORKERS=${ENABLE_WORKERS:-true}
+      - AUTO_REINDEX_ON_STARTUP=${AUTO_REINDEX_ON_STARTUP:-false}
     depends_on:
-      - mongodb
-      - minio
-      - mistral_ocr
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app
       - /app/node_modules
     networks:
       - parecer_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Frontend
   frontend:
@@ -102,31 +152,27 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: parecer_frontend
-    restart: always
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:3000"  # Exposto publicamente (porta web padrão)
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - NODE_ENV=${NODE_ENV:-production}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
     networks:
       - parecer_network
-
-  # Redis para cache e filas
-  redis:
-    image: redis:7-alpine
-    container_name: parecer_redis
-    restart: always
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - parecer_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   mongodb_data:
